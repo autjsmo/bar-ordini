@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Ordini · QR Menu</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <link href="./style.css" rel="stylesheet">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Ordini</h1>
+    <div id="tableInfo" class="table-info hidden">
+      <span>Tavolo <strong id="currentTable">—</strong></span>
+    </div>
+  </header>
+
+  <div id="toast" class="toast hidden" aria-live="polite"></div>
+
+  <!-- PIN Gate -->
+  <div id="pinGate" class="modal">
+    <div class="modal-content">
+      <h2>Accesso Tavolo <span id="pinGateTable">—</span></h2>
+      <p>Inserisci il PIN comunicato dal cameriere.</p>
+      <input type="text" id="pinInput" placeholder="PIN (4 cifre)" inputmode="numeric" maxlength="4" autocomplete="off">
+      <button id="pinSubmit" class="btn primary">Accedi</button>
+      <p class="hint">Il PIN ti è stato fornito dal personale di sala.</p>
+    </div>
+  </div>
+
+  <!-- Menu -->
+  <main id="menuSection" class="hidden">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Cerca nel menù..." inputmode="text">
+    </div>
+    
+    <nav class="categories" id="categoryNav"></nav>
+    
+    <div id="menuItems"></div>
+    
+    <!-- Carrello fisso in basso -->
+    <div id="cartBar" class="cart-bar hidden">
+      <div class="cart-summary">
+        <span id="cartCount">0 articoli</span>
+        <span id="cartTotal">0.00 €</span>
+      </div>
+      <button id="viewCartBtn" class="btn primary">Vedi carrello</button>
+    </div>
+  </main>
+
+  <!-- Modal Carrello -->
+  <div id="cartModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Il tuo ordine</h2>
+      <div id="cartItems" class="cart-list"></div>
+      <div class="cart-footer">
+        <div class="cart-total">
+          <strong>Totale:</strong>
+          <strong id="cartModalTotal">0.00 €</strong>
+        </div>
+        <div class="row">
+          <button id="closeCartBtn" class="btn">Continua ordine</button>
+          <button id="submitOrderBtn" class="btn primary">Invia ordine</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Stato Ordine -->
+  <div id="orderStatusModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Ordine inviato! 🎉</h2>
+      <div class="order-status">
+        <div class="status-step" data-state="richiesta">
+          <div class="status-icon">��</div>
+          <div class="status-label">Richiesta</div>
+        </div>
+        <div class="status-step" data-state="accettato">
+          <div class="status-icon">✅</div>
+          <div class="status-label">Accettato</div>
+        </div>
+        <div class="status-step" data-state="in-preparazione">
+          <div class="status-icon">👨‍🍳</div>
+          <div class="status-label">In preparazione</div>
+        </div>
+        <div class="status-step" data-state="servito">
+          <div class="status-icon">🎊</div>
+          <div class="status-label">Servito</div>
+        </div>
+      </div>
+      <p class="hint" id="orderStatusText">Il tuo ordine è stato ricevuto.</p>
+      <button id="closeOrderStatusBtn" class="btn primary">Ordina altro</button>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span>Buon appetito! 🍽️</span>
+  </footer>
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
