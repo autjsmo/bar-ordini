@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>Ordini · Teeria Tête à Thè</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#2d5016">
+  <meta name="theme-color" content="#3f6b3c">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Italiana&display=swap" rel="stylesheet">
@@ -12,12 +12,16 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="logo">
-      <span class="logo-icon">🌸</span>
-      <h1>Teeria Tête à Thè</h1>
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">🌸</div>
+      <div class="brand-text">
+        <div class="brand-title">Teeria Tête à Thè</div>
+        <div class="brand-subtitle">Ordina dal tavolo</div>
+      </div>
     </div>
+
     <div id="tableInfo" class="table-info hidden">
-      <span>🍽️ Tavolo <strong id="currentTable">—</strong></span>
+      Tavolo <strong id="currentTable">—</strong>
     </div>
   </header>
 
@@ -26,96 +30,103 @@
   <!-- PIN Gate -->
   <div id="pinGate" class="modal">
     <div class="modal-content pin-gate">
-      <div class="modal-header">
-        <span class="modal-icon">🔐</span>
-        <h2>Benvenuto al Tavolo <span id="pinGateTable">—</span></h2>
+      <h2>Accesso Tavolo <span id="pinGateTable">—</span></h2>
+      <p class="hint">Inserisci il PIN comunicato dal personale.</p>
+      <div class="pin-row">
+        <input type="text" id="pinInput" placeholder="••••" inputmode="numeric" maxlength="4" autocomplete="off">
+        <button id="pinSubmit" class="btn primary">Accedi</button>
       </div>
-      <p class="modal-subtitle">Inserisci il PIN comunicato dal nostro staff</p>
-      <input type="text" id="pinInput" placeholder="••••" inputmode="numeric" maxlength="4" autocomplete="off">
-      <button id="pinSubmit" class="btn primary">Accedi al menù</button>
-      <p class="hint">Il PIN ti è stato fornito dal personale di sala</p>
+      <p class="hint small">Se non hai il PIN, chiedi al cameriere.</p>
     </div>
   </div>
 
-  <!-- Menu -->
   <main id="menuSection" class="hidden">
-    <div class="search-container">
+    <section class="panel">
       <div class="search-box">
-        <span class="search-icon">🔍</span>
-        <input type="text" id="searchInput" placeholder="Cerca nel menù..." inputmode="text">
+        <span class="search-icon" aria-hidden="true">🔎</span>
+        <input type="text" id="searchInput" placeholder="Cerca nel menù..." autocomplete="off">
       </div>
-    </div>
-    
-    <nav class="categories" id="categoryNav"></nav>
-    
-    <div id="menuItems"></div>
-    
-    <!-- Carrello fisso in basso -->
+
+      <nav class="categories" id="categoryNav" aria-label="Categorie"></nav>
+
+      <!-- ✅ NUOVO: pulsante per aprire storico -->
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button id="openHistoryBtn" class="btn" type="button">I tuoi ordini</button>
+        <button id="refreshHistoryBtn" class="btn" type="button">Aggiorna</button>
+      </div>
+    </section>
+
+    <section id="menuItems" class="menu-items" aria-live="polite"></section>
+
     <div id="cartBar" class="cart-bar hidden">
       <div class="cart-summary">
-        <span class="cart-count-label" id="cartCount">0 articoli</span>
-        <span class="cart-total-value" id="cartTotal">0.00 €</span>
+        <span id="cartCount" class="cart-count">0 articoli</span>
+        <span id="cartTotal" class="cart-total">0.00 €</span>
       </div>
       <button id="viewCartBtn" class="btn primary cart-btn">
-        <span>🛒</span>
-        <span>Vedi carrello</span>
+        <span aria-hidden="true">🛒</span>
+        <span>Carrello</span>
       </button>
     </div>
   </main>
 
-  <!-- Modal Carrello -->
-  <div id="cartModal" class="modal hidden">
+  <!-- Carrello -->
+  <div id="cartModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Carrello">
     <div class="modal-content">
-      <div class="modal-header">
+      <div class="modal-head">
         <h2>Il tuo ordine</h2>
-        <button id="closeCartBtn" class="close-modal-btn">✕</button>
+        <button id="closeCartBtn" class="icon-btn" aria-label="Chiudi">✕</button>
       </div>
+
       <div id="cartItems" class="cart-list"></div>
+
       <div class="cart-footer">
-        <div class="cart-total">
+        <div class="cart-total-row">
           <span>Totale</span>
           <strong id="cartModalTotal">0.00 €</strong>
         </div>
-        <button id="submitOrderBtn" class="btn primary full-width">
-          <span>📨</span>
-          <span>Invia ordine</span>
-        </button>
+        <button id="submitOrderBtn" class="btn primary full">Invia ordine</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal Stato Ordine -->
-  <div id="orderStatusModal" class="modal hidden">
-    <div class="modal-content success-modal">
-      <div class="success-animation">
-        <span class="success-icon">✓</span>
+  <!-- ✅ NUOVO: Modale storico ordini -->
+  <div id="historyModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="I tuoi ordini">
+    <div class="modal-content">
+      <div class="modal-head">
+        <h2>I tuoi ordini</h2>
+        <button id="closeHistoryBtn" class="icon-btn" aria-label="Chiudi">✕</button>
       </div>
-      <h2>Ordine inviato!</h2>
-      <p class="success-message">Il tuo ordine è stato ricevuto dal nostro staff</p>
-      <div class="order-status">
-        <div class="status-step active" data-state="richiesta">
-          <div class="status-icon">📝</div>
+      <div id="historyList" class="cart-list"></div>
+      <div class="hint">Lo stato può cambiare quando lo staff serve l’ordine.</div>
+    </div>
+  </div>
+
+  <!-- Stato ordine -->
+  <div id="orderStatusModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Stato ordine">
+    <div class="modal-content">
+      <h2>Ordine inviato</h2>
+      <p class="hint" id="orderStatusText">Grazie! Lo staff ha ricevuto la richiesta.</p>
+
+      <div class="status-line">
+        <div class="status-dot active">
+          <div class="status-emoji">📝</div>
           <div class="status-label">Ricevuto</div>
         </div>
-        <div class="status-connector"></div>
-        <div class="status-step" data-state="preparazione">
-          <div class="status-icon">👨‍🍳</div>
-          <div class="status-label">In preparazione</div>
-        </div>
-        <div class="status-connector"></div>
-        <div class="status-step" data-state="servito">
-          <div class="status-icon">🎊</div>
+        <div class="status-dot">
+          <div class="status-emoji">🎊</div>
           <div class="status-label">Servito</div>
         </div>
       </div>
-      <button id="closeOrderStatusBtn" class="btn primary full-width">Ordina altro</button>
+
+      <button id="closeOrderStatusBtn" class="btn primary full">Ordina altro</button>
     </div>
   </div>
 
   <footer class="footer">
-    <div class="footer-decoration">🌿</div>
-    <span>Buon appetito!</span>
-    <div class="footer-decoration">🌿</div>
+    <span aria-hidden="true">🌿</span>
+    <span>Buon appetito</span>
+    <span aria-hidden="true">🌿</span>
   </footer>
 
   <script src="./config.js"></script>
