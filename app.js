@@ -54,6 +54,53 @@ function closeOrderStatus() { $('#orderStatusModal').classList.add('hidden'); }
 function openHistory() { $('#historyModal').classList.remove('hidden'); }
 function closeHistory() { $('#historyModal').classList.add('hidden'); }
 
+function stopHistoryPolling() {
+  if (historyPoll) clearInterval(historyPoll);
+  historyPoll = null;
+}
+
+function showFatalError(title, message) {
+  stopHistoryPolling();
+
+  // Nascondi tutto ciò che non deve apparire
+  closePinGate();
+  $('#menuSection')?.classList.add('hidden');
+  $('#tableInfo')?.classList.add('hidden');
+  $('#cartBar')?.classList.add('hidden');
+  closeCart();
+  closeHistory();
+  closeOrderStatus();
+
+  // Mostra una pagina di errore al posto del contenuto
+  document.body.innerHTML = `
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">🌸</div>
+        <div class="brand-text">
+          <div class="brand-title">Teeria Tête à Thè</div>
+          <div class="brand-subtitle">Ordina dal tavolo</div>
+        </div>
+      </div>
+    </header>
+
+    <main style="max-width:840px;margin:0 auto;padding:18px 14px 140px">
+      <div class="panel" style="padding:18px">
+        <h2 style="margin:0 0 8px 0;font-family:'Italiana',serif;color:var(--primary)">${title}</h2>
+        <p class="hint" style="text-align:left">${message}</p>
+        <div class="hint" style="text-align:left;margin-top:12px">
+          Suggerimento: scansiona di nuovo il QR del tavolo oppure chiedi allo staff.
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span aria-hidden="true">🌿</span>
+      <span>Buon appetito</span>
+      <span aria-hidden="true">🌿</span>
+    </footer>
+  `;
+}
+
 function getTags(item) {
   try {
     if (!item.tags) return [];
@@ -149,13 +196,6 @@ function renderCategories() {
   const nav = $('#categoryNav');
   nav.innerHTML = '';
   const cats = menuData.categories || [];
-
-  // "Tutte" opzionale: se vuoi, la riattivo
-  // const allBtn = document.createElement('button');
-  // allBtn.className = 'category-btn' + (!activeCategoryId ? ' active' : '');
-  // allBtn.textContent = 'Tutte';
-  // allBtn.onclick = () => { activeCategoryId = null; renderMenu(); renderCategories(); };
-  // nav.appendChild(allBtn);
 
   for (const c of cats) {
     const btn = document.createElement('button');
@@ -300,11 +340,6 @@ function startHistoryPolling() {
   }, 5000);
 }
 
-function stopHistoryPolling() {
-  if (historyPoll) clearInterval(historyPoll);
-  historyPoll = null;
-}
-
 // === PIN ===
 
 async function doVerifyPin() {
@@ -329,8 +364,7 @@ async function doVerifyPin() {
     showMenu();
 
     await loadMenu();
-    await loadHistory(); // ✅ carica subito storico
-
+    await loadHistory();
     startHistoryPolling();
 
     toast('Accesso effettuato');
@@ -378,7 +412,6 @@ async function submitOrder() {
     $('#orderStatusText').textContent = 'Grazie! Lo staff ha ricevuto la richiesta.';
     openOrderStatus();
 
-    // ✅ aggiorna storico subito
     await loadHistory();
   } catch (e) {
     toast('Errore invio ordine: ' + e.message);
@@ -387,9 +420,13 @@ async function submitOrder() {
 
 function boot() {
   tableId = qsParam('table');
+
+  // ✅ QUI: se manca ?table= mostriamo pagina errore e non facciamo vedere il PIN
   if (!tableId) {
-    toast('Manca il parametro ?table=');
-    openPinGate();
+    showFatalError(
+      'Errore QR',
+      'Questo link non è associato a nessun tavolo. Manca il parametro <strong>?table=</strong>.'
+    );
     return;
   }
 
@@ -424,7 +461,6 @@ function boot() {
   $('#cartModal').addEventListener('click', (e) => { if (e.target.id === 'cartModal') closeCart(); });
   $('#orderStatusModal').addEventListener('click', (e) => { if (e.target.id === 'orderStatusModal') closeOrderStatus(); });
 
-  // storico
   $('#openHistoryBtn').onclick = async () => {
     openHistory();
     try { await loadHistory(); } catch {}
@@ -433,7 +469,6 @@ function boot() {
   $('#closeHistoryBtn').onclick = closeHistory;
   $('#historyModal').addEventListener('click', (e) => { if (e.target.id === 'historyModal') closeHistory(); });
 
-  // pulizia polling se chiudi tab
   window.addEventListener('beforeunload', () => stopHistoryPolling());
 }
 
