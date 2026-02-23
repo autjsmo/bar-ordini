@@ -28,10 +28,8 @@ body{
   padding-bottom:120px;
 }
 
-/* Util */
 .hidden{display:none!important}
 
-/* Topbar */
 .topbar{
   position:sticky;
   top:0;
@@ -80,9 +78,25 @@ body{
   font-size:13px;
   color:var(--primary);
   font-weight:700;
+  display:flex;
+  align-items:center;
+  gap:10px;
 }
 
-/* Toast */
+.mini-btn{
+  border:1px solid var(--border);
+  background:#fff;
+  color:var(--primary);
+  border-radius:999px;
+  padding:8px 10px;
+  font-weight:900;
+  cursor:pointer;
+  box-shadow:var(--shadow);
+  font-family:"Crimson Pro", ui-serif, Georgia, serif;
+  white-space:nowrap;
+}
+.mini-btn:active{transform:scale(.98)}
+
 .toast{
   position:fixed;
   left:50%;
@@ -98,7 +112,6 @@ body{
   font-weight:700;
 }
 
-/* Modal */
 .modal{
   position:fixed;
   inset:0;
@@ -151,14 +164,12 @@ body{
   background:#fff;
 }
 
-/* Main */
 main{
   max-width:840px;
   margin:0 auto;
   padding:14px 14px 140px;
 }
 
-/* Panel (search + categories) */
 .panel{
   background:rgba(255,255,255,.72);
   border:1px solid var(--border);
@@ -168,7 +179,6 @@ main{
   margin-bottom:14px;
 }
 
-/* Search */
 .search-box{position:relative}
 .search-icon{
   position:absolute;
@@ -188,7 +198,6 @@ main{
   font-family:"Crimson Pro", ui-serif, Georgia, serif;
 }
 
-/* Categories */
 .categories{
   display:flex;
   gap:8px;
@@ -213,9 +222,7 @@ main{
   color:#fff;
 }
 
-/* Menu list */
 .menu-items{padding:2px}
-
 .menu-category{margin:18px 0}
 
 .menu-category h2{
@@ -282,7 +289,6 @@ main{
   justify-content:flex-end;
 }
 
-/* Qty controls */
 .qty-control{
   display:flex;
   align-items:center;
@@ -312,7 +318,6 @@ main{
   color:var(--primary);
 }
 
-/* Buttons */
 .btn{
   border:none;
   background:#64748b;
@@ -330,14 +335,12 @@ main{
 }
 
 .btn.full{width:100%}
-
 .cart-btn{
   display:flex;
   gap:8px;
   align-items:center;
 }
 
-/* Cart bar */
 .cart-bar{
   position:fixed;
   left:0;
@@ -373,7 +376,6 @@ main{
   color:var(--primary);
 }
 
-/* Cart modal */
 .modal-head{
   display:flex;
   align-items:center;
@@ -428,7 +430,6 @@ main{
   font-size:18px;
 }
 
-/* Order status */
 .status-line{
   display:flex;
   justify-content:space-between;
@@ -458,18 +459,6 @@ main{
   margin-top:6px;
 }
 
-/* Footer */
-.footer{
-  text-align:center;
-  padding:22px 10px;
-  color:var(--muted);
-  font-style:italic;
-  display:flex;
-  justify-content:center;
-  gap:10px;
-}
-
-/* Mobile tweaks */
 @media (max-width:420px){
   .pin-row{flex-direction:column}
 }
