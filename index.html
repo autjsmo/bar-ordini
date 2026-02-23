@@ -2,16 +2,22 @@
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <title>Ordini · QR Menu</title>
+  <title>Ordini · Teeria Tête à Thè</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#2d5016">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Italiana&display=swap" rel="stylesheet">
   <link href="./style.css" rel="stylesheet">
 </head>
 <body>
   <header class="topbar">
-    <h1>Ordini</h1>
+    <div class="logo">
+      <span class="logo-icon">🌸</span>
+      <h1>Teeria Tête à Thè</h1>
+    </div>
     <div id="tableInfo" class="table-info hidden">
-      <span>Tavolo <strong id="currentTable">—</strong></span>
+      <span>🍽️ Tavolo <strong id="currentTable">—</strong></span>
     </div>
   </header>
 
@@ -19,19 +25,25 @@
 
   <!-- PIN Gate -->
   <div id="pinGate" class="modal">
-    <div class="modal-content">
-      <h2>Accesso Tavolo <span id="pinGateTable">—</span></h2>
-      <p>Inserisci il PIN comunicato dal cameriere.</p>
-      <input type="text" id="pinInput" placeholder="PIN (4 cifre)" inputmode="numeric" maxlength="4" autocomplete="off">
-      <button id="pinSubmit" class="btn primary">Accedi</button>
-      <p class="hint">Il PIN ti è stato fornito dal personale di sala.</p>
+    <div class="modal-content pin-gate">
+      <div class="modal-header">
+        <span class="modal-icon">🔐</span>
+        <h2>Benvenuto al Tavolo <span id="pinGateTable">—</span></h2>
+      </div>
+      <p class="modal-subtitle">Inserisci il PIN comunicato dal nostro staff</p>
+      <input type="text" id="pinInput" placeholder="••••" inputmode="numeric" maxlength="4" autocomplete="off">
+      <button id="pinSubmit" class="btn primary">Accedi al menù</button>
+      <p class="hint">Il PIN ti è stato fornito dal personale di sala</p>
     </div>
   </div>
 
   <!-- Menu -->
   <main id="menuSection" class="hidden">
-    <div class="search-box">
-      <input type="text" id="searchInput" placeholder="Cerca nel menù..." inputmode="text">
+    <div class="search-container">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Cerca nel menù..." inputmode="text">
+      </div>
     </div>
     
     <nav class="categories" id="categoryNav"></nav>
@@ -41,60 +53,69 @@
     <!-- Carrello fisso in basso -->
     <div id="cartBar" class="cart-bar hidden">
       <div class="cart-summary">
-        <span id="cartCount">0 articoli</span>
-        <span id="cartTotal">0.00 €</span>
+        <span class="cart-count-label" id="cartCount">0 articoli</span>
+        <span class="cart-total-value" id="cartTotal">0.00 €</span>
       </div>
-      <button id="viewCartBtn" class="btn primary">Vedi carrello</button>
+      <button id="viewCartBtn" class="btn primary cart-btn">
+        <span>🛒</span>
+        <span>Vedi carrello</span>
+      </button>
     </div>
   </main>
 
   <!-- Modal Carrello -->
   <div id="cartModal" class="modal hidden">
     <div class="modal-content">
-      <h2>Il tuo ordine</h2>
+      <div class="modal-header">
+        <h2>Il tuo ordine</h2>
+        <button id="closeCartBtn" class="close-modal-btn">✕</button>
+      </div>
       <div id="cartItems" class="cart-list"></div>
       <div class="cart-footer">
         <div class="cart-total">
-          <strong>Totale:</strong>
+          <span>Totale</span>
           <strong id="cartModalTotal">0.00 €</strong>
         </div>
-        <div class="row">
-          <button id="closeCartBtn" class="btn">Continua ordine</button>
-          <button id="submitOrderBtn" class="btn primary">Invia ordine</button>
-        </div>
+        <button id="submitOrderBtn" class="btn primary full-width">
+          <span>📨</span>
+          <span>Invia ordine</span>
+        </button>
       </div>
     </div>
   </div>
 
   <!-- Modal Stato Ordine -->
   <div id="orderStatusModal" class="modal hidden">
-    <div class="modal-content">
-      <h2>Ordine inviato! 🎉</h2>
+    <div class="modal-content success-modal">
+      <div class="success-animation">
+        <span class="success-icon">✓</span>
+      </div>
+      <h2>Ordine inviato!</h2>
+      <p class="success-message">Il tuo ordine è stato ricevuto dal nostro staff</p>
       <div class="order-status">
-        <div class="status-step" data-state="richiesta">
-          <div class="status-icon">��</div>
-          <div class="status-label">Richiesta</div>
+        <div class="status-step active" data-state="richiesta">
+          <div class="status-icon">📝</div>
+          <div class="status-label">Ricevuto</div>
         </div>
-        <div class="status-step" data-state="accettato">
-          <div class="status-icon">✅</div>
-          <div class="status-label">Accettato</div>
-        </div>
-        <div class="status-step" data-state="in-preparazione">
+        <div class="status-connector"></div>
+        <div class="status-step" data-state="preparazione">
           <div class="status-icon">👨‍🍳</div>
           <div class="status-label">In preparazione</div>
         </div>
+        <div class="status-connector"></div>
         <div class="status-step" data-state="servito">
           <div class="status-icon">🎊</div>
           <div class="status-label">Servito</div>
         </div>
       </div>
-      <p class="hint" id="orderStatusText">Il tuo ordine è stato ricevuto.</p>
-      <button id="closeOrderStatusBtn" class="btn primary">Ordina altro</button>
+      <button id="closeOrderStatusBtn" class="btn primary full-width">Ordina altro</button>
     </div>
   </div>
 
   <footer class="footer">
-    <span>Buon appetito! 🍽️</span>
+    <div class="footer-decoration">🌿</div>
+    <span>Buon appetito!</span>
+    <div class="footer-decoration">🌿</div>
   </footer>
 
   <script src="./config.js"></script>
