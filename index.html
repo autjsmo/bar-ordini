@@ -10,8 +10,43 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Italiana&display=swap" rel="stylesheet">
 
-  <!-- ✅ path assoluto per GitHub Pages repo "bar-ordini" -->
-  <link href="/bar-ordini/style.css" rel="stylesheet" id="mainStylesheet">
+  <!-- 1) CSS standard -->
+  <link rel="stylesheet" href="/bar-ordini/style.css" id="mainStylesheet">
+
+  <!-- 2) Fix: se per cache/redirect non viene applicato, lo reiniettiamo con cache-busting -->
+  <script>
+    (function () {
+      const CSS_PATH = '/bar-ordini/style.css';
+      const EXPECTED_BG = 'rgb(251, 248, 242)'; // #fbf8f2 del tema floreale
+
+      function bgNow() {
+        try { return getComputedStyle(document.body).backgroundColor; }
+        catch { return ''; }
+      }
+
+      function injectBustedCss() {
+        const href = `${location.origin}${CSS_PATH}?v=${Date.now()}`;
+        const l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = href;
+        l.onload = () => console.log('[CSS] injected OK', href);
+        l.onerror = () => console.log('[CSS] injected ERROR', href);
+        document.head.appendChild(l);
+      }
+
+      // Nota: usiamo window.load + timeout breve per lasciare al browser il tempo di applicare.
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const bg = bgNow();
+          // Se non è il colore atteso, vuol dire che il CSS non è stato applicato -> fallback.
+          if (bg && bg !== EXPECTED_BG) {
+            console.log('[CSS] not applied, bg=', bg, '-> fallback inject');
+            injectBustedCss();
+          }
+        }, 180);
+      });
+    })();
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -127,17 +162,8 @@
     <span aria-hidden="true">🌿</span>
   </footer>
 
-  <!-- ✅ path assoluti per GitHub Pages repo "bar-ordini" -->
+  <!-- JS con path assoluti -->
   <script src="/bar-ordini/config.js"></script>
   <script src="/bar-ordini/app.js"></script>
-
-  <script>
-    const link = document.getElementById('mainStylesheet');
-    link.addEventListener('error', () => {
-      const t = document.getElementById('toast');
-      t.textContent = 'CSS non caricato. Controlla che /bar-ordini/style.css esista su GitHub Pages.';
-      t.classList.remove('hidden');
-    });
-  </script>
 </body>
 </html>
