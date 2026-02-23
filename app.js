@@ -1,8 +1,8 @@
-// Cliente App
-let tableId = null;
-let token = null;
-let menu = { categories: [], items: [] };
-let cart = {}; // { itemId: { item, quantity } }
+// Admin App
+let adminPassword = '';
+let currentCategoryId = null;
+let ordersRefreshInterval = null;
+let allMenuData = { categories: [], items: [] };
 
 const $ = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
@@ -11,410 +11,955 @@ const $$ = sel => Array.from(document.querySelectorAll(sel));
 async function apiCall(endpoint, options = {}) {
   const url = `${CONFIG.API_BASE}${endpoint}`;
   const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (adminPassword) headers['Authorization'] = `Bearer ${adminPassword}`;
   
   const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Network error' }));
-    throw new Error(error.error || `API error: ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`API error: ${response.status}`);
   return response.json();
 }
 
 // Toast
-function toast(msg, duration = 3000) {
+function toast(msg) {
   const t = $('#toast');
   t.textContent = msg;
   t.classList.remove('hidden');
-  setTimeout(() => t.classList.add('hidden'), duration);
+  setTimeout(() => t.classList.add('hidden'), 3000);
 }
 
-// Parse URL
-function parseUrl() {
-  const params = new URLSearchParams(location.search);
-  tableId = params.get('table');
-  if (!tableId) {
-    document.body.innerHTML = '<div style="padding:40px;text-align:center"><h2>Link non valido</h2><p>Scansiona il QR code del tavolo per ordinare.</p></div>';
+// Login
+function requireLogin() {
+  const modal = $('#loginModal');
+  modal.classList.remove('hidden');
+  
+  $('#loginSubmit').onclick = () => {
+    const pwd = $('#adminPasswordInput').value.trim();
+    if (!pwd) return alert('Inserisci la password');
+    adminPassword = pwd;
+    modal.classList.add('hidden');
+    boot();
+  };
+}
+
+// Tabs
+function setupTabs() {
+  $$('.tab-btn').forEach(btn => {
+    btn.onclick = () => {
+      $$('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const id = btn.dataset.tab;
+      $$('.tab').forEach(t => t.classList.remove('active'));
+      $(`#tab-${id}`).classList.add('active');
+      
+      if (id === 'stats') setTimeout(() => renderStats(), 50);
+      if (id === 'orders') {
+        renderOrders();
+        startOrdersAutoRefresh();
+      } else {
+        stopOrdersAutoRefresh();
+      }
+    };
+  });
+}
+
+// TAVOLI
+function formatElapsedTime(openedAt) {
+  const now = Date.now();
+  const diff = now - openedAt;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+async function checkPendingOrders(tableId, sessionId) {
+  try {
+    if (!sessionId) return false;
+    
+    const params = new URLSearchParams();
+    params.append('session_id', sessionId);
+    params.append('state', 'richiesta');
+    const { orders } = await apiCall(`/orders?${params}`);
+    return orders.length > 0;
+  } catch (e) {
     return false;
   }
-  $('#pinGateTable').textContent = tableId;
-  $('#currentTable').textContent = tableId;
-  return true;
 }
 
-// PIN Gate
-function showPinGate() {
-  // Controlla se token salvato è ancora valido
-  const savedToken = localStorage.getItem(`token_table_${tableId}`);
-  if (savedToken) {
-    token = savedToken;
-    verifyToken();
-  } else {
-    $('#pinGate').classList.remove('hidden');
-  }
-}
-
-async function verifyToken() {
+async function renderTables() {
   try {
-    // Verifica se il token è ancora valido caricando il menu
-    await loadMenu();
-    $('#pinGate').classList.add('hidden');
-    $('#menuSection').classList.remove('hidden');
-    $('#tableInfo').classList.remove('hidden');
+    const { tables } = await apiCall('/tables');
+    const list = $('#tablesList');
+    list.innerHTML = '';
+    
+    const filterSel = $('#ordersFilterTable');
+    filterSel.innerHTML = '<option value="">Tutti i tavoli</option>';
+    
+    for (const table of tables) {
+      const opt = document.createElement('option');
+      opt.value = table.id;
+      opt.textContent = `Tavolo ${table.id}`;
+      filterSel.appendChild(opt);
+      
+      const card = document.createElement('div');
+      card.className = 'card table-card';
+      
+      let badge = `<span class="badge closed">Non attivo</span>`;
+      let timer = '';
+      let buttons = `
+        <button data-act="open" data-id="${table.id}" class="btn primary">Apri sessione</button>
+        <button data-act="qr" data-id="${table.id}" class="btn">Mostra QR</button>
+      `;
+      
+      if (table.active_session) {
+        const elapsed = formatElapsedTime(table.active_session.opened_at);
+        const hasPending = await checkPendingOrders(table.id, table.active_session.id);
+        
+        if (hasPending) {
+          badge = `<span class="badge has-pending">In sessione · PIN ${table.active_session.pin}</span>`;
+          card.classList.add('has-pending-orders');
+        } else {
+          badge = `<span class="badge open">In sessione · PIN ${table.active_session.pin}</span>`;
+        }
+        
+        timer = `<div class="table-timer">⏱️ Aperto da: ${elapsed}</div>`;
+        buttons = `
+          <button data-act="close" data-id="${table.id}" class="btn danger">Chiudi sessione</button>
+          <button data-act="reset" data-id="${table.id}" class="btn warn">Reset (nuovo PIN)</button>
+          <button data-act="qr" data-id="${table.id}" class="btn">Mostra QR</button>
+        `;
+      }
+      
+      card.innerHTML = `
+        <h3 class="table-header" data-table-id="${table.id}" data-has-session="${table.active_session ? 'true' : 'false'}">Tavolo ${table.id} ${badge}</h3>
+        ${timer}
+        <div class="row">
+          ${buttons}
+        </div>
+      `;
+      
+      card.querySelector('.table-header').onclick = () => showTableDetails(table.id, table.active_session);
+      
+      if (table.active_session) {
+        card.querySelector('[data-act="close"]').onclick = () => closeSession(table.id);
+        card.querySelector('[data-act="reset"]').onclick = () => resetSession(table.id);
+      } else {
+        card.querySelector('[data-act="open"]').onclick = () => openSession(table.id);
+      }
+      card.querySelector('[data-act="qr"]').onclick = () => showQr(table.id);
+      
+      list.appendChild(card);
+    }
+    
+    setTimeout(renderTables, 60000);
   } catch (e) {
-    // Token non valido, richiedi PIN
-    localStorage.removeItem(`token_table_${tableId}`);
-    token = null;
-    $('#pinGate').classList.remove('hidden');
+    toast('Errore caricamento tavoli: ' + e.message);
   }
 }
 
-$('#pinSubmit').onclick = async () => {
-  const pin = $('#pinInput').value.trim();
-  if (!/^\d{4}$/.test(pin)) {
-    toast('Inserisci un PIN di 4 cifre');
+async function showTableDetails(tableId, activeSession) {
+  if (!activeSession) {
+    toast('Nessuna sessione attiva per questo tavolo');
     return;
   }
   
   try {
-    const response = await apiCall('/session/verify', {
+    const params = new URLSearchParams();
+    params.append('session_id', activeSession.id);
+    
+    const { orders } = await apiCall(`/orders?${params}`);
+    const pendingOrders = orders.filter(o => o.state === 'richiesta');
+    
+    if (pendingOrders.length > 0) {
+      $$('.tab-btn').forEach(b => b.classList.remove('active'));
+      $$('.tab-btn')[1].classList.add('active');
+      $$('.tab').forEach(t => t.classList.remove('active'));
+      $('#tab-orders').classList.add('active');
+      
+      $('#ordersFilterTable').value = tableId;
+      $('#ordersFilterState').value = 'richiesta';
+      await renderOrders();
+      startOrdersAutoRefresh();
+      
+      toast(`${pendingOrders.length} ordine/i in attesa per Tavolo ${tableId}`);
+    } else {
+      showSessionSummary(tableId, orders, activeSession);
+    }
+  } catch (e) {
+    toast('Errore caricamento dettagli: ' + e.message);
+  }
+}
+
+function showSessionSummary(tableId, orders, session) {
+  const servedOrders = orders.filter(o => o.state === 'servito');
+  const canceledOrders = orders.filter(o => o.state === 'annullato');
+  
+  let totalRevenue = 0;
+  const itemsSummary = new Map();
+  
+  servedOrders.forEach(order => {
+    order.items.forEach(item => {
+      const revenue = item.quantity * parseFloat(item.unit_price_eur);
+      totalRevenue += revenue;
+      
+      if (itemsSummary.has(item.item_name)) {
+        const existing = itemsSummary.get(item.item_name);
+        existing.quantity += item.quantity;
+        existing.revenue += revenue;
+      } else {
+        itemsSummary.set(item.item_name, {
+          quantity: item.quantity,
+          price: parseFloat(item.unit_price_eur),
+          revenue
+        });
+      }
+    });
+  });
+  
+  const existingModal = $('#sessionSummaryModal');
+  if (existingModal) existingModal.remove();
+  
+  const modal = document.createElement('div');
+  modal.id = 'sessionSummaryModal';
+  modal.className = 'modal';
+  
+  const itemsList = Array.from(itemsSummary.entries()).map(([name, data]) => {
+    return `
+      <div class="product-item">
+        <span class="product-name">${name}</span>
+        <span class="product-qty">×${data.quantity}</span>
+        <span class="product-revenue">${data.revenue.toFixed(2)} €</span>
+      </div>
+    `;
+  }).join('');
+  
+  const elapsed = formatElapsedTime(session.opened_at);
+  const openedDate = new Date(session.opened_at).toLocaleString('it-IT');
+  
+  modal.innerHTML = `
+    <div class="modal-content">
+      <h2>📊 Riepilogo Tavolo ${tableId}</h2>
+      <div style="background:var(--bg);padding:16px;border-radius:12px;margin:16px 0">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px">
+          <div><strong>PIN:</strong> ${session.pin}</div>
+          <div><strong>Durata:</strong> ${elapsed}</div>
+          <div style="grid-column:1/-1"><strong>Apertura:</strong> ${openedDate}</div>
+        </div>
+      </div>
+      
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0">
+        <div style="background:linear-gradient(135deg, #22c55e, #16a34a);padding:16px;border-radius:12px;text-align:center;color:#fff">
+          <div style="font-size:28px;font-weight:900">${servedOrders.length}</div>
+          <div style="font-size:13px;opacity:0.9">Serviti</div>
+        </div>
+        <div style="background:linear-gradient(135deg, #ef4444, #dc2626);padding:16px;border-radius:12px;text-align:center;color:#fff">
+          <div style="font-size:28px;font-weight:900">${canceledOrders.length}</div>
+          <div style="font-size:13px;opacity:0.9">Annullati</div>
+        </div>
+        <div style="background:linear-gradient(135deg, #3b82f6, #1d4ed8);padding:16px;border-radius:12px;text-align:center;color:#fff">
+          <div style="font-size:28px;font-weight:900">${totalRevenue.toFixed(0)}€</div>
+          <div style="font-size:13px;opacity:0.9">Totale</div>
+        </div>
+      </div>
+      
+      ${itemsSummary.size > 0 ? `
+        <h3 style="margin:24px 0 12px 0">Articoli serviti</h3>
+        <div class="product-list" style="max-height:40vh;overflow-y:auto">
+          ${itemsList}
+        </div>
+      ` : '<p class="hint" style="text-align:center;padding:20px">Nessun ordine servito in questa sessione.</p>'}
+      
+      <div style="margin-top:24px;padding-top:20px;border-top:2px solid var(--border);text-align:center">
+        <strong style="font-size:22px;color:var(--primary)">Totale: ${totalRevenue.toFixed(2)} €</strong>
+      </div>
+      
+      <div style="margin-top:24px;text-align:center">
+        <button id="closeSessionSummaryModal" class="btn primary">Chiudi</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  $('#closeSessionSummaryModal').onclick = () => modal.remove();
+  modal.onclick = (e) => {
+    if (e.target === modal) modal.remove();
+  };
+}
+
+async function openSession(tableId) {
+  try {
+    const { pin } = await apiCall('/session/open', {
       method: 'POST',
-      body: JSON.stringify({ table_id: tableId, pin })
+      body: JSON.stringify({ table_id: tableId })
     });
     
-    token = response.token;
-    localStorage.setItem(`token_table_${tableId}`, token);
+    $('#pinModalTable').textContent = tableId;
+    $('#pinDigits').textContent = pin;
+    $('#pinModal').classList.remove('hidden');
     
-    $('#pinGate').classList.add('hidden');
-    $('#menuSection').classList.remove('hidden');
-    $('#tableInfo').classList.remove('hidden');
-    
-    await loadMenu();
-    toast('Accesso consentito! 🎉');
+    renderTables();
   } catch (e) {
-    toast('PIN non valido. Chiedi al cameriere il PIN corretto.');
-    $('#pinInput').value = '';
+    toast('Errore apertura sessione: ' + e.message);
+  }
+}
+
+async function closeSession(tableId) {
+  if (!confirm(`Chiudere definitivamente la sessione del Tavolo ${tableId}?`)) return;
+  
+  try {
+    await apiCall('/session/close', {
+      method: 'POST',
+      body: JSON.stringify({ table_id: tableId })
+    });
+    
+    toast(`Sessione Tavolo ${tableId} chiusa.`);
+    renderTables();
+  } catch (e) {
+    toast('Errore chiusura sessione: ' + e.message);
+  }
+}
+
+async function resetSession(tableId) {
+  if (!confirm(`Reset sessione Tavolo ${tableId}? Verrà generato un nuovo PIN.`)) return;
+  
+  try {
+    await apiCall('/session/close', {
+      method: 'POST',
+      body: JSON.stringify({ table_id: tableId })
+    });
+    
+    const { pin } = await apiCall('/session/open', {
+      method: 'POST',
+      body: JSON.stringify({ table_id: tableId })
+    });
+    
+    $('#pinModalTable').textContent = tableId;
+    $('#pinDigits').textContent = pin;
+    $('#pinModal').classList.remove('hidden');
+    
+    toast(`Nuovo PIN generato per Tavolo ${tableId}`);
+    renderTables();
+  } catch (e) {
+    toast('Errore reset sessione: ' + e.message);
+  }
+}
+
+function showQr(tableId) {
+  const base = CONFIG.ORDERS_SITE_BASE;
+  const url = `${base}?table=${tableId}`;
+  
+  $('#qrTableNumber').textContent = tableId;
+  $('#qrLink').textContent = url;
+  
+  const cont = $('#qrContainer');
+  cont.innerHTML = '';
+  const size = Math.min(320, Math.floor(window.innerWidth * 0.8));
+  new QRCode(cont, { text: url, width: size, height: size });
+  
+  $('#qrModal').classList.remove('hidden');
+}
+
+$('#closePinModal').onclick = () => $('#pinModal').classList.add('hidden');
+$('#closeQrModal').onclick = () => $('#qrModal').classList.add('hidden');
+
+$('#addTableBtn').onclick = async () => {
+  const id = $('#newTableId').value.trim();
+  if (!id || !/^\d+$/.test(id)) return alert('Inserisci ID numerico');
+  
+  try {
+    await apiCall('/tables', {
+      method: 'POST',
+      body: JSON.stringify({ id: parseInt(id), label: `Tavolo ${id}` })
+    });
+    $('#newTableId').value = '';
+    toast(`Tavolo ${id} creato`);
+    renderTables();
+  } catch (e) {
+    toast('Errore creazione tavolo: ' + e.message);
   }
 };
 
-// Menu
-async function loadMenu() {
+// ORDINI
+function startOrdersAutoRefresh() {
+  if (ordersRefreshInterval) return;
+  ordersRefreshInterval = setInterval(renderOrders, 5000);
+}
+
+function stopOrdersAutoRefresh() {
+  if (ordersRefreshInterval) {
+    clearInterval(ordersRefreshInterval);
+    ordersRefreshInterval = null;
+  }
+}
+
+function initOrdersDateFilter() {
+  const today = new Date().toISOString().split('T')[0];
+  $('#ordersFilterDate').value = today;
+}
+
+async function renderOrders() {
   try {
-    const data = await apiCall('/menu');
-    menu = data;
-    renderMenu();
+    const tableFilter = $('#ordersFilterTable').value;
+    const stateFilter = $('#ordersFilterState').value;
+    const dateFilter = $('#ordersFilterDate').value;
+    
+    const params = new URLSearchParams();
+    if (tableFilter) params.append('table_id', tableFilter);
+    if (stateFilter) params.append('state', stateFilter);
+    
+    const { orders } = await apiCall(`/orders?${params}`);
+    
+    let filteredOrders = orders;
+    if (dateFilter) {
+      const filterDate = new Date(dateFilter).setHours(0, 0, 0, 0);
+      filteredOrders = orders.filter(order => {
+        const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
+        return orderDate === filterDate;
+      });
+    }
+    
+    const list = $('#ordersList');
+    list.innerHTML = '';
+    
+    if (filteredOrders.length === 0) {
+      list.innerHTML = '<div class="card"><p class="hint">Nessun ordine trovato.</p></div>';
+      return;
+    }
+    
+    filteredOrders.forEach(order => {
+      const card = document.createElement('div');
+      let cardClass = 'order-card pending';
+      if (order.state === 'servito') cardClass = 'order-card servito';
+      if (order.state === 'annullato') cardClass = 'order-card annullato';
+      
+      card.className = cardClass;
+      
+      const itemsHtml = order.items.map(it => 
+        `<div>${it.item_name} <strong>×${it.quantity}</strong> — ${parseFloat(it.unit_price_eur).toFixed(2)}€</div>`
+      ).join('');
+      
+      const date = new Date(order.created_at).toLocaleString('it-IT');
+      
+      let statusIcon = '⏳';
+      let statusText = 'In attesa';
+      if (order.state === 'servito') { statusIcon = '✅'; statusText = 'Servito'; }
+      if (order.state === 'annullato') { statusIcon = '❌'; statusText = 'Annullato'; }
+      
+      card.innerHTML = `
+        <div class="order-header">
+          <strong>Tavolo ${order.table_id}</strong>
+          <span>${statusIcon} ${statusText}</span>
+        </div>
+        <div class="hint">${date}</div>
+        <div class="order-items">${itemsHtml}</div>
+        <div class="order-actions">
+          <button data-act="served" data-id="${order.id}" class="btn ok">✅ Servito</button>
+          <button data-act="cancel" data-id="${order.id}" class="btn danger">❌ Annulla</button>
+        </div>
+      `;
+      
+      card.querySelector('[data-act="served"]').onclick = () => changeOrderState(order.id, 'servito');
+      card.querySelector('[data-act="cancel"]').onclick = () => changeOrderState(order.id, 'annullato');
+      
+      list.appendChild(card);
+    });
+  } catch (e) {
+    toast('Errore caricamento ordini: ' + e.message);
+  }
+}
+
+async function changeOrderState(orderId, newState) {
+  try {
+    await apiCall(`/orders/${orderId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ state: newState })
+    });
+    toast(`Ordine ${newState}`);
+    renderOrders();
+    renderTables();
+  } catch (e) {
+    toast('Errore aggiornamento ordine: ' + e.message);
+  }
+}
+
+$('#ordersFilterTable').onchange = renderOrders;
+$('#ordersFilterState').onchange = renderOrders;
+$('#ordersFilterDate').onchange = renderOrders;
+
+$('#ordersClearDateBtn').onclick = () => {
+  $('#ordersFilterDate').value = '';
+  renderOrders();
+};
+
+// MENÙ - REDESIGN
+async function renderMenu() {
+  try {
+    const { categories, items } = await apiCall('/menu/admin');
+    allMenuData = { categories, items };
+    renderCategories();
   } catch (e) {
     toast('Errore caricamento menù: ' + e.message);
   }
 }
 
-function renderMenu() {
-  renderCategories();
-  renderAllItems();
-}
-
 function renderCategories() {
-  const nav = $('#categoryNav');
-  nav.innerHTML = '<button class="category-btn active" data-cat="all">Tutto</button>';
+  const grid = $('#categoriesGrid');
+  grid.innerHTML = '';
   
-  menu.categories.forEach(cat => {
-    const btn = document.createElement('button');
-    btn.className = 'category-btn';
-    btn.textContent = cat.name;
-    btn.dataset.cat = cat.id;
-    btn.onclick = () => {
-      $$('.category-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      filterByCategory(cat.id);
-    };
-    nav.appendChild(btn);
-  });
-  
-  $$('.category-btn')[0].onclick = () => {
-    $$('.category-btn').forEach(b => b.classList.remove('active'));
-    $$('.category-btn')[0].classList.add('active');
-    renderAllItems();
-  };
-}
-
-function renderAllItems() {
-  const container = $('#menuItems');
-  container.innerHTML = '';
-  
-  menu.categories.forEach(cat => {
-    const items = menu.items.filter(i => i.category_id === cat.id && i.visible);
-    if (items.length === 0) return;
+  allMenuData.categories.forEach(cat => {
+    const card = document.createElement('div');
+    card.className = 'category-card';
+    if (currentCategoryId === cat.id) card.classList.add('active');
     
-    const section = document.createElement('div');
-    section.className = 'menu-category';
-    section.innerHTML = `<h2>${cat.name}</h2>`;
+    const itemsCount = allMenuData.items.filter(i => i.category_id === cat.id).length;
     
-    items.forEach(item => {
-      section.appendChild(createMenuItem(item));
-    });
+    card.innerHTML = `
+      <div class="category-name">${cat.name}</div>
+      <div class="hint">${itemsCount} articol${itemsCount !== 1 ? 'i' : 'o'}</div>
+      <div class="category-actions">
+        <button class="btn small" data-act="select">Apri</button>
+        <button class="btn small" data-act="rename">Rinomina</button>
+        <button class="btn small danger" data-act="delete">Elimina</button>
+      </div>
+    `;
     
-    container.appendChild(section);
+    card.querySelector('[data-act="select"]').onclick = () => selectCategory(cat.id, cat.name);
+    card.querySelector('[data-act="rename"]').onclick = () => renameCategory(cat.id, cat.name);
+    card.querySelector('[data-act="delete"]').onclick = () => deleteCategory(cat.id);
+    
+    grid.appendChild(card);
   });
 }
 
-function filterByCategory(catId) {
-  const container = $('#menuItems');
-  container.innerHTML = '';
+function selectCategory(catId, catName) {
+  currentCategoryId = catId;
+  $('#itemsSectionTitle').textContent = `Articoli · ${catName}`;
+  $('#itemsContainer').classList.remove('hidden');
+  renderItems();
+  renderCategories(); // Re-render per evidenziare la categoria attiva
+}
+
+function renderItems() {
+  const grid = $('#itemsList');
+  grid.innerHTML = '';
   
-  const cat = menu.categories.find(c => c.id === catId);
-  const items = menu.items.filter(i => i.category_id === catId && i.visible);
-  
-  const section = document.createElement('div');
-  section.className = 'menu-category';
-  section.innerHTML = `<h2>${cat.name}</h2>`;
+  const items = allMenuData.items.filter(i => i.category_id === currentCategoryId);
   
   items.forEach(item => {
-    section.appendChild(createMenuItem(item));
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    
+    const tags = item.tags ? JSON.parse(item.tags).filter(t => t.toLowerCase() !== 'bio') : [];
+    const tagsHtml = tags.map(t => `<span class="item-tag">${t}</span>`).join('');
+    
+    card.innerHTML = `
+      <div class="item-header">
+        <div class="item-name">${item.name}</div>
+        <div class="item-price">${parseFloat(item.price_eur).toFixed(2)} €</div>
+      </div>
+      ${item.description ? `<div class="item-description">${item.description}</div>` : ''}
+      ${tags.length ? `<div class="item-tags">${tagsHtml}</div>` : ''}
+      <div class="item-status">${item.visible ? '👁️ Visibile' : '🚫 Nascosto'}</div>
+      <div class="item-actions">
+        <button data-act="edit" class="btn small">Modifica</button>
+        <button data-act="delete" class="btn small danger">Elimina</button>
+      </div>
+    `;
+    
+    card.querySelector('[data-act="edit"]').onclick = () => editItem(item);
+    card.querySelector('[data-act="delete"]').onclick = () => deleteItem(item.id);
+    
+    grid.appendChild(card);
   });
-  
-  container.appendChild(section);
 }
 
-function createMenuItem(item) {
-  const card = document.createElement('div');
-  card.className = 'menu-item';
+async function renameCategory(catId, oldName) {
+  const name = prompt('Nuovo nome categoria', oldName);
+  if (!name || name === oldName) return;
   
-  const tags = item.tags ? JSON.parse(item.tags) : [];
-  const tagsHtml = tags.map(tag => {
-    const className = tag.toLowerCase() === 'bio' ? 'tag bio' : 'tag';
-    return `<span class="${className}">${tag}</span>`;
+  try {
+    await apiCall(`/menu/categories/${catId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name })
+    });
+    toast('Categoria rinominata');
+    renderMenu();
+  } catch (e) {
+    toast('Errore: ' + e.message);
+  }
+}
+
+async function deleteCategory(catId) {
+  if (!confirm('Eliminare categoria e tutti gli articoli?')) return;
+  
+  try {
+    await apiCall(`/menu/categories/${catId}`, { method: 'DELETE' });
+    toast('Categoria eliminata');
+    if (currentCategoryId === catId) {
+      currentCategoryId = null;
+      $('#itemsContainer').classList.add('hidden');
+      $('#itemsSectionTitle').textContent = 'Seleziona una categoria per gestire gli articoli';
+    }
+    renderMenu();
+  } catch (e) {
+    toast('Errore: ' + e.message);
+  }
+}
+
+async function editItem(item) {
+  const name = prompt('Nome', item.name);
+  if (!name) return;
+  
+  const price = prompt('Prezzo (€)', item.price_eur);
+  if (!price) return;
+  
+  const desc = prompt('Descrizione', item.description || '');
+  const visible = confirm('Articolo visibile? OK=sì, Annulla=no');
+  
+  try {
+    await apiCall(`/menu/items/${item.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ 
+        name, 
+        price_eur: parseFloat(price), 
+        description: desc || null, 
+        visible 
+      })
+    });
+    toast('Articolo aggiornato');
+    renderMenu();
+  } catch (e) {
+    toast('Errore: ' + e.message);
+  }
+}
+
+async function deleteItem(itemId) {
+  if (!confirm('Eliminare articolo?')) return;
+  
+  try {
+    await apiCall(`/menu/items/${itemId}`, { method: 'DELETE' });
+    toast('Articolo eliminato');
+    renderMenu();
+  } catch (e) {
+    toast('Errore: ' + e.message);
+  }
+}
+
+$('#addCategoryBtn').onclick = async () => {
+  const name = $('#newCategoryName').value.trim();
+  if (!name) return alert('Inserisci nome categoria');
+  
+  try {
+    await apiCall('/menu/categories', {
+      method: 'POST',
+      body: JSON.stringify({ name, position: 999 })
+    });
+    $('#newCategoryName').value = '';
+    toast('Categoria aggiunta');
+    renderMenu();
+  } catch (e) {
+    toast('Errore: ' + e.message);
+  }
+};
+
+$('#addItemBtn').onclick = async () => {
+  if (!currentCategoryId) return alert('Seleziona una categoria');
+  
+  const name = $('#itemName').value.trim();
+  const price = parseFloat($('#itemPrice').value);
+  if (!name || isNaN(price) || price < 0) return alert('Nome e prezzo validi richiesti');
+  
+  const desc = $('#itemDescription').value.trim();
+  const tags = [];
+  if ($('#itemTagNovita').checked) tags.push('Novità');
+  const visible = $('#itemVisible').checked;
+  
+  try {
+    await apiCall('/menu/items', {
+      method: 'POST',
+      body: JSON.stringify({
+        category_id: currentCategoryId,
+        name,
+        price_eur: price,
+        description: desc || null,
+        tags,
+        visible,
+        position: 999
+      })
+    });
+    
+    $('#itemName').value = '';
+    $('#itemPrice').value = '';
+    $('#itemDescription').value = '';
+    $('#itemTagNovita').checked = false;
+    $('#itemVisible').checked = true;
+    
+    toast('Articolo aggiunto');
+    renderMenu();
+  } catch (e) {
+    toast('Errore: ' + e.message);
+  }
+};
+
+$('#exportMenuJsonBtn').onclick = async () => {
+  try {
+    const blob = new Blob([JSON.stringify(allMenuData, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'menu.json';
+    a.click();
+  } catch (e) {
+    toast('Errore export: ' + e.message);
+  }
+};
+
+$('#importMenuJsonBtn').onclick = () => {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'application/json';
+  inp.onchange = async () => {
+    const file = inp.files[0];
+    if (!file) return;
+    
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      alert('Import manuale: usa console SQL D1 per import massivo.');
+    } catch (e) {
+      alert('Errore JSON: ' + e.message);
+    }
+  };
+  inp.click();
+};
+
+// STATISTICHE
+let topItemsChart, tablesOpenedChart;
+
+async function renderStats() {
+  try {
+    const from = $('#statsFrom').value;
+    const to = $('#statsTo').value;
+    
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    
+    const [topItems, tablesOpened, ordersData] = await Promise.all([
+      apiCall(`/stats/top-items?${params}`),
+      apiCall(`/stats/tables-opened?${params}`),
+      apiCall(`/orders?${params}&state=servito`)
+    ]);
+    
+    let totalRevenue = 0;
+    let totalOrders = ordersData.orders.length;
+    
+    ordersData.orders.forEach(order => {
+      order.items.forEach(item => {
+        totalRevenue += item.quantity * parseFloat(item.unit_price_eur);
+      });
+    });
+    
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    
+    $('#totalRevenue').textContent = `${totalRevenue.toFixed(2)} €`;
+    $('#totalOrders').textContent = totalOrders;
+    $('#avgOrderValue').textContent = `${avgOrderValue.toFixed(2)} €`;
+    
+    const top10 = topItems.top_items.slice(0, 10);
+    
+    if (topItemsChart) topItemsChart.destroy();
+    topItemsChart = new Chart($('#topItemsChart'), {
+      type: 'bar',
+      data: {
+        labels: top10.map(i => i.item_name),
+        datasets: [{
+          label: 'Quantità venduta',
+          data: top10.map(i => i.total),
+          backgroundColor: '#3b82f6',
+          borderRadius: 8
+        }]
+      },
+      options: { 
+        responsive: true, 
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+    
+    if (tablesOpenedChart) tablesOpenedChart.destroy();
+    tablesOpenedChart = new Chart($('#tablesOpenedChart'), {
+      type: 'line',
+      data: {
+        labels: tablesOpened.tables_opened.map(t => t.day),
+        datasets: [{
+          label: 'Tavoli aperti',
+          data: tablesOpened.tables_opened.map(t => t.count),
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34,197,94,.2)',
+          tension: 0.3,
+          fill: true
+        }]
+      },
+      options: { 
+        responsive: true, 
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+    
+    window.allProductsData = topItems.top_items;
+    
+  } catch (e) {
+    toast('Errore statistiche: ' + e.message);
+  }
+}
+
+$('#refreshStats').onclick = renderStats;
+
+$('#viewAllProducts').onclick = () => {
+  if (!window.allProductsData || window.allProductsData.length === 0) {
+    alert('Nessun prodotto venduto nel periodo selezionato.');
+    return;
+  }
+  
+  showAllProductsModal(window.allProductsData);
+};
+
+async function showAllProductsModal(products) {
+  const from = $('#statsFrom').value;
+  const to = $('#statsTo').value;
+  const params = new URLSearchParams();
+  if (from) params.append('from', from);
+  if (to) params.append('to', to);
+  params.append('state', 'servito');
+  
+  const { orders } = await apiCall(`/orders?${params}`);
+  
+  const revenueMap = new Map();
+  orders.forEach(order => {
+    order.items.forEach(item => {
+      const revenue = item.quantity * parseFloat(item.unit_price_eur);
+      revenueMap.set(item.item_name, (revenueMap.get(item.item_name) || 0) + revenue);
+    });
+  });
+  
+  const existingModal = $('#allProductsModal');
+  if (existingModal) existingModal.remove();
+  
+  const modal = document.createElement('div');
+  modal.id = 'allProductsModal';
+  modal.className = 'modal';
+  
+  const productsList = products.map(p => {
+    const revenue = revenueMap.get(p.item_name) || 0;
+    return `
+      <div class="product-item">
+        <span class="product-name">${p.item_name}</span>
+        <span class="product-qty">×${p.total}</span>
+        <span class="product-revenue">${revenue.toFixed(2)} €</span>
+      </div>
+    `;
   }).join('');
   
-  const qty = cart[item.id]?.quantity || 0;
+  const totalRevenue = Array.from(revenueMap.values()).reduce((sum, v) => sum + v, 0);
   
-  card.innerHTML = `
-    <div class="menu-item-header">
-      <div class="menu-item-name">${item.name}</div>
-      <div class="menu-item-price">${parseFloat(item.price_eur).toFixed(2)} €</div>
-    </div>
-    ${item.description ? `<div class="menu-item-desc">${item.description}</div>` : ''}
-    ${tagsHtml ? `<div class="menu-item-tags">${tagsHtml}</div>` : ''}
-    <div class="menu-item-footer">
-      <div class="qty-control">
-        <button class="qty-btn" data-act="minus" data-id="${item.id}">−</button>
-        <div class="qty-display" data-id="${item.id}">${qty}</div>
-        <button class="qty-btn" data-act="plus" data-id="${item.id}">+</button>
+  modal.innerHTML = `
+    <div class="modal-content">
+      <h2>Tutti i prodotti venduti</h2>
+      <div class="product-list">
+        ${productsList}
+      </div>
+      <div style="margin-top:20px;padding-top:20px;border-top:2px solid var(--border);text-align:center">
+        <strong style="font-size:18px">Totale ricavi: ${totalRevenue.toFixed(2)} €</strong>
+      </div>
+      <div style="margin-top:20px;text-align:center">
+        <button id="closeAllProductsModal" class="btn primary">Chiudi</button>
       </div>
     </div>
   `;
   
-  card.querySelector('[data-act="plus"]').onclick = () => addToCart(item);
-  card.querySelector('[data-act="minus"]').onclick = () => removeFromCart(item.id);
+  document.body.appendChild(modal);
   
-  return card;
+  $('#closeAllProductsModal').onclick = () => modal.remove();
+  modal.onclick = (e) => {
+    if (e.target === modal) modal.remove();
+  };
 }
 
-// Carrello
-function addToCart(item) {
-  if (!cart[item.id]) {
-    cart[item.id] = { item, quantity: 0 };
-  }
-  
-  if (cart[item.id].quantity >= 10) {
-    toast('Quantità massima per articolo: 10');
-    return;
-  }
-  
-  cart[item.id].quantity++;
-  updateCart();
-  toast(`${item.name} aggiunto al carrello`);
-}
-
-function removeFromCart(itemId) {
-  if (!cart[itemId]) return;
-  
-  cart[itemId].quantity--;
-  if (cart[itemId].quantity <= 0) {
-    delete cart[itemId];
-  }
-  
-  updateCart();
-}
-
-function updateCart() {
-  // Aggiorna quantità nei pulsanti
-  Object.keys(cart).forEach(itemId => {
-    const display = $(`.qty-display[data-id="${itemId}"]`);
-    if (display) display.textContent = cart[itemId].quantity;
-  });
-  
-  // Aggiorna contatori vuoti
-  $$('.qty-display').forEach(display => {
-    const id = display.dataset.id;
-    if (!cart[id]) display.textContent = '0';
-  });
-  
-  // Calcola totale
-  const items = Object.values(cart);
-  const count = items.reduce((sum, c) => sum + c.quantity, 0);
-  const total = items.reduce((sum, c) => sum + c.quantity * parseFloat(c.item.price_eur), 0);
-  
-  if (count === 0) {
-    $('#cartBar').classList.add('hidden');
-  } else {
-    $('#cartBar').classList.remove('hidden');
-    $('#cartCount').textContent = `${count} ${count === 1 ? 'articolo' : 'articoli'}`;
-    $('#cartTotal').textContent = `${total.toFixed(2)} €`;
-  }
-}
-
-$('#viewCartBtn').onclick = () => {
-  renderCartModal();
-  $('#cartModal').classList.remove('hidden');
-};
-
-$('#closeCartBtn').onclick = () => {
-  $('#cartModal').classList.add('hidden');
-};
-
-function renderCartModal() {
-  const list = $('#cartItems');
-  list.innerHTML = '';
-  
-  const items = Object.values(cart);
-  let total = 0;
-  
-  items.forEach(({ item, quantity }) => {
-    const subtotal = quantity * parseFloat(item.price_eur);
-    total += subtotal;
-    
-    const card = document.createElement('div');
-    card.className = 'cart-item';
-    card.innerHTML = `
-      <div class="cart-item-info">
-        <div class="cart-item-name">${item.name}</div>
-        <div class="cart-item-price">${parseFloat(item.price_eur).toFixed(2)} € × ${quantity} = ${subtotal.toFixed(2)} €</div>
-      </div>
-      <div class="cart-item-actions">
-        <button class="qty-btn" data-act="minus" data-id="${item.id}">−</button>
-        <div class="qty-display">${quantity}</div>
-        <button class="qty-btn" data-act="plus" data-id="${item.id}">+</button>
-      </div>
-    `;
-    
-    card.querySelector('[data-act="plus"]').onclick = () => { addToCart(item); renderCartModal(); };
-    card.querySelector('[data-act="minus"]').onclick = () => { removeFromCart(item.id); renderCartModal(); };
-    
-    list.appendChild(card);
-  });
-  
-  $('#cartModalTotal').textContent = `${total.toFixed(2)} €`;
-}
-
-$('#submitOrderBtn').onclick = async () => {
-  const items = Object.values(cart);
-  if (items.length === 0) {
-    toast('Il carrello è vuoto');
-    return;
-  }
-  
-  // Controlla tetto massimo 200€
-  const total = items.reduce((sum, c) => sum + c.quantity * parseFloat(c.item.price_eur), 0);
-  if (total > 200) {
-    toast('Tetto massimo ordine: 200 €. Riduci la quantità.');
-    return;
-  }
-  
+$('#exportStatsCsv').onclick = async () => {
   try {
-    const orderItems = items.map(({ item, quantity }) => ({
-      item_id: item.id,
-      name: item.name,
-      quantity,
-      price_eur: parseFloat(item.price_eur)
-    }));
+    const from = $('#statsFrom').value;
+    const to = $('#statsTo').value;
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
     
-    await apiCall('/orders', {
-      method: 'POST',
-      body: JSON.stringify({ token, items: orderItems })
+    const [topItems, tablesOpened, ordersData] = await Promise.all([
+      apiCall(`/stats/top-items?${params}`),
+      apiCall(`/stats/tables-opened?${params}`),
+      apiCall(`/orders?${params}&state=servito`)
+    ]);
+    
+    const revenueMap = new Map();
+    let totalRevenue = 0;
+    ordersData.orders.forEach(order => {
+      order.items.forEach(item => {
+        const revenue = item.quantity * parseFloat(item.unit_price_eur);
+        revenueMap.set(item.item_name, (revenueMap.get(item.item_name) || 0) + revenue);
+        totalRevenue += revenue;
+      });
     });
     
-    // Svuota carrello
-    cart = {};
-    updateCart();
+    let csv = 'STATISTICHE ORDINI\n\n';
+    csv += 'Ricavi totali,' + totalRevenue.toFixed(2) + '\n';
+    csv += 'Ordini serviti,' + ordersData.orders.length + '\n';
+    csv += 'Valore medio ordine,' + (ordersData.orders.length > 0 ? (totalRevenue / ordersData.orders.length).toFixed(2) : 0) + '\n\n';
     
-    $('#cartModal').classList.add('hidden');
-    showOrderStatus('richiesta');
+    csv += 'PRODOTTI VENDUTI\n';
+    csv += 'prodotto,quantita,ricavi\n';
+    topItems.top_items.forEach(i => {
+      const revenue = revenueMap.get(i.item_name) || 0;
+      csv += `${i.item_name},${i.total},${revenue.toFixed(2)}\n`;
+    });
+    
+    csv += '\nTAVOLI APERTI PER GIORNO\n';
+    csv += 'giorno,tavoli_aperti\n';
+    tablesOpened.tables_opened.forEach(t => csv += `${t.day},${t.count}\n`);
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'statistiche.csv';
+    a.click();
   } catch (e) {
-    if (e.message.includes('Invalid or closed session')) {
-      toast('Sessione chiusa. Chiedi un nuovo PIN al cameriere.');
-      localStorage.removeItem(`token_table_${tableId}`);
-      location.reload();
-    } else {
-      toast('Errore invio ordine: ' + e.message);
-    }
+    toast('Errore export CSV: ' + e.message);
   }
-};
-
-// Stato ordine
-function showOrderStatus(state) {
-  const modal = $('#orderStatusModal');
-  modal.classList.remove('hidden');
-  
-  const steps = ['richiesta', 'accettato', 'in-preparazione', 'servito'];
-  const currentIndex = steps.indexOf(state);
-  
-  $$('.status-step').forEach((step, i) => {
-    if (i <= currentIndex) {
-      step.classList.add('active');
-    } else {
-      step.classList.remove('active');
-    }
-  });
-  
-  const messages = {
-    richiesta: 'Il tuo ordine è stato ricevuto ed è in attesa di conferma.',
-    accettato: 'Il tuo ordine è stato accettato dal personale.',
-    'in-preparazione': 'Il tuo ordine è in preparazione. Arriva presto!',
-    servito: 'Il tuo ordine è stato servito. Buon appetito! 🎊'
-  };
-  
-  $('#orderStatusText').textContent = messages[state] || messages.richiesta;
-}
-
-$('#closeOrderStatusBtn').onclick = () => {
-  $('#orderStatusModal').classList.add('hidden');
-};
-
-// Ricerca
-$('#searchInput').oninput = (e) => {
-  const query = e.target.value.toLowerCase().trim();
-  if (!query) {
-    renderAllItems();
-    return;
-  }
-  
-  const container = $('#menuItems');
-  container.innerHTML = '';
-  
-  const filtered = menu.items.filter(i => 
-    i.visible && (
-      i.name.toLowerCase().includes(query) ||
-      (i.description && i.description.toLowerCase().includes(query))
-    )
-  );
-  
-  if (filtered.length === 0) {
-    container.innerHTML = '<div class="hint" style="text-align:center;padding:40px">Nessun articolo trovato.</div>';
-    return;
-  }
-  
-  const section = document.createElement('div');
-  section.className = 'menu-category';
-  section.innerHTML = '<h2>Risultati ricerca</h2>';
-  
-  filtered.forEach(item => {
-    section.appendChild(createMenuItem(item));
-  });
-  
-  container.appendChild(section);
 };
 
 // Boot
-if (parseUrl()) {
-  showPinGate();
+async function boot() {
+  try {
+    initOrdersDateFilter(); // Imposta data odierna di default
+    await renderTables();
+    await renderMenu();
+    await renderStats();
+  } catch (e) {
+    if (e.message.includes('401')) {
+      alert('Password errata o non autorizzato');
+      adminPassword = '';
+      requireLogin();
+    } else {
+      toast('Errore inizializzazione: ' + e.message);
+    }
+  }
 }
+
+// Init
+setupTabs();
+requireLogin();
