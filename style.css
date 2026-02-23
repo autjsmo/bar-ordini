@@ -28,7 +28,6 @@ body{
   padding-bottom:120px;
 }
 
-/* Util */
 .hidden{display:none!important}
 
 /* Topbar */
@@ -56,15 +55,15 @@ body{
 .brand-mark{font-size:26px}
 .brand-text{min-width:0}
 
-/* ✅ NON tagliare il titolo: va a capo se serve */
+/* ✅ Titolo: una riga (se non ci sta, ellissi) */
 .brand-title{
   font-family:"Italiana", serif;
   font-size:18px;
   letter-spacing:.4px;
-  white-space:normal;
-  overflow:visible;
-  text-overflow:clip;
-  line-height:1.15;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:52vw;
 }
 
 .brand-subtitle{
@@ -73,27 +72,31 @@ body{
   margin-top:2px;
 }
 
+/* ✅ Tavolo più piccolo per lasciare spazio al titolo */
 .table-info{
   flex-shrink:0;
   border:1px solid var(--border);
   background:rgba(63,107,60,.06);
-  padding:8px 12px;
+  padding:6px 10px;
   border-radius:999px;
-  font-size:13px;
+  font-size:12px;
   color:var(--primary);
-  font-weight:700;
+  font-weight:800;
   display:flex;
   align-items:center;
-  gap:10px;
+  gap:8px;
 }
+.table-info strong{font-size:12px}
 
+/* Bottone “I tuoi ordini” compatto */
 .mini-btn{
   border:1px solid var(--border);
   background:#fff;
   color:var(--primary);
   border-radius:999px;
-  padding:8px 10px;
+  padding:6px 8px;
   font-weight:900;
+  font-size:12px;
   cursor:pointer;
   box-shadow:var(--shadow);
   font-family:"Crimson Pro", ui-serif, Georgia, serif;
@@ -177,7 +180,7 @@ main{
   padding:14px 14px 140px;
 }
 
-/* Panel (search + categories) */
+/* Panel */
 .panel{
   background:rgba(255,255,255,.72);
   border:1px solid var(--border);
@@ -205,33 +208,6 @@ main{
   font-size:16px;
   background:#fff;
   font-family:"Crimson Pro", ui-serif, Georgia, serif;
-}
-
-/* ✅ Categories: tutte visibili (griglia che va a capo) */
-.categories{
-  display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap:8px;
-  padding:12px 2px 2px;
-  overflow:visible;
-}
-
-.category-btn{
-  width:100%;
-  text-align:center;
-  border:1px solid var(--border);
-  background:#fff;
-  border-radius:999px;
-  padding:10px 12px;
-  font-weight:700;
-  color:var(--text);
-  cursor:pointer;
-}
-
-.category-btn.active{
-  background:linear-gradient(135deg, var(--primary), var(--primary2));
-  border-color:transparent;
-  color:#fff;
 }
 
 /* Menu list */
