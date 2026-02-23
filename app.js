@@ -11,6 +11,7 @@ const $ = (s) => document.querySelector(s);
 
 function toast(msg) {
   const el = $('#toast');
+  if (!el) return;
   el.textContent = msg;
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 2600);
@@ -41,37 +42,35 @@ function setTableInfo(id) {
   $('#tableInfo').classList.remove('hidden');
 }
 
-function showMenu() { $('#menuSection').classList.remove('hidden'); }
-function openPinGate() { $('#pinGate').classList.remove('hidden'); }
-function closePinGate() { $('#pinGate').classList.add('hidden'); }
+function showMenu() { $('#menuSection')?.classList.remove('hidden'); }
+function openPinGate() { $('#pinGate')?.classList.remove('hidden'); }
+function closePinGate() { $('#pinGate')?.classList.add('hidden'); }
 
-function openCart() { $('#cartModal').classList.remove('hidden'); }
-function closeCart() { $('#cartModal').classList.add('hidden'); }
+function openCart() { $('#cartModal')?.classList.remove('hidden'); }
+function closeCart() { $('#cartModal')?.classList.add('hidden'); }
 
-function openOrderStatus() { $('#orderStatusModal').classList.remove('hidden'); }
-function closeOrderStatus() { $('#orderStatusModal').classList.add('hidden'); }
+function openOrderStatus() { $('#orderStatusModal')?.classList.remove('hidden'); }
+function closeOrderStatus() { $('#orderStatusModal')?.classList.add('hidden'); }
 
-function openHistory() { $('#historyModal').classList.remove('hidden'); }
-function closeHistory() { $('#historyModal').classList.add('hidden'); }
+function openHistory() { $('#historyModal')?.classList.remove('hidden'); }
+function closeHistory() { $('#historyModal')?.classList.add('hidden'); }
 
 function stopHistoryPolling() {
   if (historyPoll) clearInterval(historyPoll);
   historyPoll = null;
 }
 
+function startHistoryPolling(intervalMs = 5000) {
+  stopHistoryPolling();
+  historyPoll = setInterval(() => {
+    loadHistory().catch(() => {});
+  }, intervalMs);
+}
+
 function showFatalError(title, message) {
   stopHistoryPolling();
-
-  // Nascondi tutto ciò che non deve apparire
   closePinGate();
-  $('#menuSection')?.classList.add('hidden');
-  $('#tableInfo')?.classList.add('hidden');
-  $('#cartBar')?.classList.add('hidden');
-  closeCart();
-  closeHistory();
-  closeOrderStatus();
 
-  // Mostra una pagina di errore al posto del contenuto
   document.body.innerHTML = `
     <header class="topbar">
       <div class="brand">
@@ -92,12 +91,6 @@ function showFatalError(title, message) {
         </div>
       </div>
     </main>
-
-    <footer class="footer">
-      <span aria-hidden="true">🌿</span>
-      <span>Buon appetito</span>
-      <span aria-hidden="true">🌿</span>
-    </footer>
   `;
 }
 
@@ -284,7 +277,7 @@ function renderAll() {
 // === STORICO ORDINI ===
 
 function stateLabel(state) {
-  if (state === 'richiesta') return 'Ricevuto';
+  if (state === 'richiesta') return 'Mandato';
   if (state === 'servito') return 'Servito';
   if (state === 'annullato') return 'Annullato';
   return state;
@@ -293,7 +286,7 @@ function stateLabel(state) {
 function stateBadgeColor(state) {
   if (state === 'servito') return '#3f6b3c';
   if (state === 'annullato') return '#b83a3a';
-  return '#c89b5f'; // richiesta
+  return '#c89b5f';
 }
 
 async function loadHistory() {
@@ -333,15 +326,6 @@ async function loadHistory() {
   }
 }
 
-function startHistoryPolling() {
-  stopHistoryPolling();
-  historyPoll = setInterval(() => {
-    loadHistory().catch(() => {});
-  }, 5000);
-}
-
-// === PIN ===
-
 async function doVerifyPin() {
   const pin = ($('#pinInput').value || '').trim();
   if (!/^\d{4}$/.test(pin)) {
@@ -356,7 +340,6 @@ async function doVerifyPin() {
     });
 
     token = data.token;
-
     sessionStorage.setItem('qr_token', token);
     sessionStorage.setItem('qr_table', String(tableId));
 
@@ -365,7 +348,9 @@ async function doVerifyPin() {
 
     await loadMenu();
     await loadHistory();
-    startHistoryPolling();
+
+    // polling “normale” quando sei nel menù
+    startHistoryPolling(5000);
 
     toast('Accesso effettuato');
   } catch {
@@ -421,7 +406,6 @@ async function submitOrder() {
 function boot() {
   tableId = qsParam('table');
 
-  // ✅ QUI: se manca ?table= mostriamo pagina errore e non facciamo vedere il PIN
   if (!tableId) {
     showFatalError(
       'Errore QR',
@@ -441,7 +425,7 @@ function boot() {
     showMenu();
     loadMenu()
       .then(loadHistory)
-      .then(startHistoryPolling)
+      .then(() => startHistoryPolling(5000))
       .catch(() => openPinGate());
   } else {
     openPinGate();
@@ -461,13 +445,27 @@ function boot() {
   $('#cartModal').addEventListener('click', (e) => { if (e.target.id === 'cartModal') closeCart(); });
   $('#orderStatusModal').addEventListener('click', (e) => { if (e.target.id === 'orderStatusModal') closeOrderStatus(); });
 
+
   $('#openHistoryBtn').onclick = async () => {
     openHistory();
     try { await loadHistory(); } catch {}
+
+    // mentre la modale è aperta, aggiorna più spesso
+    startHistoryPolling(2500);
   };
-  $('#refreshHistoryBtn').onclick = () => loadHistory().catch(() => {});
-  $('#closeHistoryBtn').onclick = closeHistory;
-  $('#historyModal').addEventListener('click', (e) => { if (e.target.id === 'historyModal') closeHistory(); });
+
+  $('#closeHistoryBtn').onclick = () => {
+    closeHistory();
+    // torna al polling normale
+    startHistoryPolling(5000);
+  };
+
+  $('#historyModal').addEventListener('click', (e) => {
+    if (e.target.id === 'historyModal') {
+      closeHistory();
+      startHistoryPolling(5000);
+    }
+  });
 
   window.addEventListener('beforeunload', () => stopHistoryPolling());
 }
