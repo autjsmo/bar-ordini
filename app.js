@@ -71,6 +71,7 @@ function showFatalError(title, message) {
   stopHistoryPolling();
   closePinGate();
 
+  // Mostra una pagina di errore al posto del contenuto (senza footer)
   document.body.innerHTML = `
     <header class="topbar">
       <div class="brand">
@@ -185,6 +186,17 @@ function getQty(itemId) {
   return cart.get(itemId)?.qty || 0;
 }
 
+/**
+ * ✅ Nuovo: scroll verso la categoria (invece di filtrare il menu)
+ */
+function scrollToCategory(catId) {
+  const el = document.getElementById(`cat-${catId}`);
+  if (!el) return;
+
+  const y = el.getBoundingClientRect().top + window.scrollY - 90; // offset topbar
+  window.scrollTo({ top: y, behavior: 'smooth' });
+}
+
 function renderCategories() {
   const nav = $('#categoryNav');
   nav.innerHTML = '';
@@ -195,10 +207,9 @@ function renderCategories() {
     btn.className = 'category-btn' + (c.id === activeCategoryId ? ' active' : '');
     btn.textContent = c.name;
     btn.onclick = () => {
-      activeCategoryId = c.id;
-      renderMenu();
+      activeCategoryId = c.id; // solo per evidenziare
       renderCategories();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToCategory(c.id);
     };
     nav.appendChild(btn);
   }
@@ -212,11 +223,13 @@ function renderMenu() {
   const cats = menuData.categories || [];
   const items = menuData.items || [];
 
-  const filteredCats = activeCategoryId ? cats.filter(c => c.id === activeCategoryId) : cats;
+  // ✅ sempre tutte le categorie visibili
+  const filteredCats = cats;
 
   for (const cat of filteredCats) {
     const catWrap = document.createElement('div');
     catWrap.className = 'menu-category';
+    catWrap.id = `cat-${cat.id}`; // ✅ anchor per scroll
     catWrap.innerHTML = `<h2>${cat.name}</h2>`;
 
     const catItems = items.filter(i => i.category_id === cat.id && i.visible);
@@ -286,7 +299,7 @@ function stateLabel(state) {
 function stateBadgeColor(state) {
   if (state === 'servito') return '#3f6b3c';
   if (state === 'annullato') return '#b83a3a';
-  return '#c89b5f';
+  return '#c89b5f'; // richiesta
 }
 
 async function loadHistory() {
@@ -326,6 +339,8 @@ async function loadHistory() {
   }
 }
 
+// === PIN ===
+
 async function doVerifyPin() {
   const pin = ($('#pinInput').value || '').trim();
   if (!/^\d{4}$/.test(pin)) {
@@ -340,6 +355,7 @@ async function doVerifyPin() {
     });
 
     token = data.token;
+
     sessionStorage.setItem('qr_token', token);
     sessionStorage.setItem('qr_table', String(tableId));
 
@@ -348,8 +364,6 @@ async function doVerifyPin() {
 
     await loadMenu();
     await loadHistory();
-
-    // polling “normale” quando sei nel menù
     startHistoryPolling(5000);
 
     toast('Accesso effettuato');
@@ -360,6 +374,7 @@ async function doVerifyPin() {
 
 async function loadMenu() {
   menuData = await api('/menu');
+  // default: prima categoria attiva per highlight, ma non filtra
   activeCategoryId = menuData.categories?.[0]?.id || null;
   renderCategories();
   renderAll();
@@ -445,18 +460,15 @@ function boot() {
   $('#cartModal').addEventListener('click', (e) => { if (e.target.id === 'cartModal') closeCart(); });
   $('#orderStatusModal').addEventListener('click', (e) => { if (e.target.id === 'orderStatusModal') closeOrderStatus(); });
 
-
+  // storico: pulsante in alto
   $('#openHistoryBtn').onclick = async () => {
     openHistory();
     try { await loadHistory(); } catch {}
-
-    // mentre la modale è aperta, aggiorna più spesso
     startHistoryPolling(2500);
   };
 
   $('#closeHistoryBtn').onclick = () => {
     closeHistory();
-    // torna al polling normale
     startHistoryPolling(5000);
   };
 
