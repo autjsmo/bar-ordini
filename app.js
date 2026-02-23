@@ -199,6 +199,8 @@ function scrollToCategory(catId) {
 
 function renderCategories() {
   const nav = $('#categoryNav');
+  if (!nav) return;
+
   nav.innerHTML = '';
   const cats = menuData.categories || [];
 
@@ -348,16 +350,23 @@ async function doVerifyPin() {
     return;
   }
 
+  // ✅ FIX: table id sempre valido (numero intero)
+  const tableIdNum = parseInt(String(tableId).trim(), 10);
+  if (!Number.isFinite(tableIdNum)) {
+    toast('Tavolo non valido. Riapri il QR.');
+    return;
+  }
+
   try {
     const data = await api('/session/verify', {
       method: 'POST',
-      body: JSON.stringify({ table_id: Number(tableId), pin })
+      body: JSON.stringify({ table_id: tableIdNum, pin })
     });
 
     token = data.token;
 
     sessionStorage.setItem('qr_token', token);
-    sessionStorage.setItem('qr_table', String(tableId));
+    sessionStorage.setItem('qr_table', String(tableIdNum));
 
     closePinGate();
     showMenu();
@@ -374,7 +383,6 @@ async function doVerifyPin() {
 
 async function loadMenu() {
   menuData = await api('/menu');
-  // default: prima categoria attiva per highlight, ma non filtra
   activeCategoryId = menuData.categories?.[0]?.id || null;
   renderCategories();
   renderAll();
@@ -434,7 +442,10 @@ function boot() {
   const savedToken = sessionStorage.getItem('qr_token');
   const savedTable = sessionStorage.getItem('qr_table');
 
-  if (savedToken && savedTable === String(tableId)) {
+  // ✅ usa confronto con numero normalizzato
+  const tableIdNum = parseInt(String(tableId).trim(), 10);
+
+  if (savedToken && savedTable === String(tableIdNum)) {
     token = savedToken;
     closePinGate();
     showMenu();
