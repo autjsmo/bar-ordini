@@ -28,8 +28,10 @@ body{
   padding-bottom:120px;
 }
 
+/* Util */
 .hidden{display:none!important}
 
+/* Topbar */
 .topbar{
   position:sticky;
   top:0;
@@ -54,13 +56,15 @@ body{
 .brand-mark{font-size:26px}
 .brand-text{min-width:0}
 
+/* ✅ NON tagliare il titolo: va a capo se serve */
 .brand-title{
   font-family:"Italiana", serif;
   font-size:18px;
   letter-spacing:.4px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  line-height:1.15;
 }
 
 .brand-subtitle{
@@ -97,6 +101,7 @@ body{
 }
 .mini-btn:active{transform:scale(.98)}
 
+/* Toast */
 .toast{
   position:fixed;
   left:50%;
@@ -112,6 +117,7 @@ body{
   font-weight:700;
 }
 
+/* Modal */
 .modal{
   position:fixed;
   inset:0;
@@ -164,12 +170,14 @@ body{
   background:#fff;
 }
 
+/* Main */
 main{
   max-width:840px;
   margin:0 auto;
   padding:14px 14px 140px;
 }
 
+/* Panel (search + categories) */
 .panel{
   background:rgba(255,255,255,.72);
   border:1px solid var(--border);
@@ -179,6 +187,7 @@ main{
   margin-bottom:14px;
 }
 
+/* Search */
 .search-box{position:relative}
 .search-icon{
   position:absolute;
@@ -198,22 +207,25 @@ main{
   font-family:"Crimson Pro", ui-serif, Georgia, serif;
 }
 
+/* ✅ Categories: tutte visibili (griglia che va a capo) */
 .categories{
-  display:flex;
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap:8px;
-  overflow:auto;
   padding:12px 2px 2px;
+  overflow:visible;
 }
 
 .category-btn{
+  width:100%;
+  text-align:center;
   border:1px solid var(--border);
   background:#fff;
   border-radius:999px;
-  padding:10px 14px;
+  padding:10px 12px;
   font-weight:700;
   color:var(--text);
   cursor:pointer;
-  flex-shrink:0;
 }
 
 .category-btn.active{
@@ -222,6 +234,7 @@ main{
   color:#fff;
 }
 
+/* Menu list */
 .menu-items{padding:2px}
 .menu-category{margin:18px 0}
 
@@ -289,6 +302,7 @@ main{
   justify-content:flex-end;
 }
 
+/* Qty controls */
 .qty-control{
   display:flex;
   align-items:center;
@@ -318,6 +332,7 @@ main{
   color:var(--primary);
 }
 
+/* Buttons */
 .btn{
   border:none;
   background:#64748b;
@@ -335,12 +350,14 @@ main{
 }
 
 .btn.full{width:100%}
+
 .cart-btn{
   display:flex;
   gap:8px;
   align-items:center;
 }
 
+/* Cart bar */
 .cart-bar{
   position:fixed;
   left:0;
@@ -376,6 +393,7 @@ main{
   color:var(--primary);
 }
 
+/* Cart modal */
 .modal-head{
   display:flex;
   align-items:center;
@@ -430,35 +448,7 @@ main{
   font-size:18px;
 }
 
-.status-line{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  margin:18px 0;
-}
-
-.status-dot{
-  flex:1;
-  border:1px solid var(--border);
-  border-radius:18px;
-  padding:12px;
-  text-align:center;
-  background:rgba(63,107,60,.05);
-}
-
-.status-dot.active{
-  background:rgba(63,107,60,.12);
-  border-color:rgba(63,107,60,.35);
-}
-
-.status-emoji{font-size:22px}
-
-.status-label{
-  font-weight:900;
-  color:var(--primary);
-  margin-top:6px;
-}
-
+/* Mobile tweaks */
 @media (max-width:420px){
   .pin-row{flex-direction:column}
 }
