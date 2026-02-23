@@ -1,83 +1,292 @@
-:root{
-  --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --muted:#94a3b8; --border:#334155;
-  --primary:#3b82f6; --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
-  --radius:12px;
-}
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5;padding-bottom:120px}
+// qr-ordini-api Worker
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const method = request.method;
 
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--border);background:var(--card);position:sticky;top:0;z-index:100}
-.topbar h1{margin:0;font-size:clamp(18px,4vw,22px)}
-.table-info{background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:14px}
+    // CORS headers
+    const allowedOrigins = [
+      'https://autjsmo.github.io',
+      'http://localhost:3000'
+    ];
+    const origin = request.headers.get('Origin');
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : allowedOrigins[0],
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    };
 
-.toast{position:fixed;left:50%;transform:translateX(-50%);top:80px;background:#1e293b;border:1px solid var(--border);padding:12px 16px;border-radius:var(--radius);z-index:1001;max-width:90%;box-shadow:0 4px 12px rgba(0,0,0,.3)}
-.hidden{display:none!important}
+    if (method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
 
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:16px;z-index:1000}
-.modal-content{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto}
+    const jsonResponse = (data, status = 200) => {
+      return new Response(JSON.stringify(data), {
+        status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    };
 
-main{padding:16px 16px 140px}
+    const isAdmin = (req) => {
+      const auth = req.headers.get('Authorization');
+      return auth === `Bearer ${env.ADMIN_PASSWORD}`;
+    };
 
-.search-box{margin-bottom:16px}
-.search-box input{width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);padding:14px 16px;border-radius:var(--radius);font-size:16px}
+    const randPin = () => String(Math.floor(1000 + Math.random() * 9000));
+    const uuid = () => crypto.randomUUID();
 
-.categories{display:flex;gap:8px;overflow-x:auto;margin-bottom:20px;padding-bottom:8px;-webkit-overflow-scrolling:touch}
-.categories::-webkit-scrollbar{height:4px}
-.categories::-webkit-scrollbar-thumb{background:var(--border);border-radius:999px}
-.category-btn{padding:10px 16px;border:1px solid var(--border);border-radius:999px;background:var(--card);color:var(--text);cursor:pointer;font-size:14px;white-space:nowrap;flex-shrink:0;min-height:44px}
-.category-btn.active{background:var(--primary);border-color:var(--primary);color:#fff}
+    try {
+      // === SESSIONI ===
 
-.menu-category{margin-bottom:24px}
-.menu-category h2{font-size:20px;margin:0 0 12px 0;padding-bottom:8px;border-bottom:2px solid var(--border)}
+      if (path === '/session/open' && method === 'POST') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const { table_id } = await request.json();
+        if (!table_id) return jsonResponse({ error: 'table_id required' }, 400);
 
-.menu-item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
-.menu-item-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
-.menu-item-name{font-size:17px;font-weight:600;flex:1}
-.menu-item-price{font-size:17px;font-weight:700;color:var(--primary);margin-left:12px}
-.menu-item-desc{color:var(--muted);font-size:14px;margin-bottom:12px;line-height:1.4}
-.menu-item-tags{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
-.tag{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3)}
-.tag.bio{background:rgba(34,197,94,.15);color:#4ade80;border-color:rgba(34,197,94,.3)}
-.menu-item-footer{display:flex;gap:8px;align-items:center;justify-content:flex-end}
-.qty-control{display:flex;align-items:center;gap:8px}
-.qty-btn{width:40px;height:40px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.qty-display{min-width:40px;text-align:center;font-size:16px;font-weight:600}
+        await env.DB.prepare('UPDATE sessions SET status = ?, closed_at = ? WHERE table_id = ? AND status = ?')
+          .bind('closed', Date.now(), table_id, 'open').run();
 
-.cart-bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);padding:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:99;box-shadow:0 -4px 12px rgba(0,0,0,.2)}
-.cart-summary{display:flex;flex-direction:column;gap:2px}
-.cart-summary span:first-child{font-size:13px;color:var(--muted)}
-.cart-summary span:last-child{font-size:18px;font-weight:700}
+        const pin = randPin();
+        const sessionId = uuid();
+        await env.DB.prepare('INSERT INTO sessions (id, table_id, pin, opened_at, status) VALUES (?, ?, ?, ?, ?)')
+          .bind(sessionId, table_id, pin, Date.now(), 'open').run();
 
-.cart-list{max-height:50vh;overflow-y:auto;margin:16px 0}
-.cart-item{display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px}
-.cart-item-info{flex:1}
-.cart-item-name{font-weight:600;margin-bottom:4px}
-.cart-item-price{color:var(--muted);font-size:14px}
-.cart-item-actions{display:flex;gap:8px;align-items:center}
+        return jsonResponse({ session_id: sessionId, pin, table_id });
+      }
 
-.cart-footer{border-top:1px solid var(--border);padding-top:16px;margin-top:16px}
-.cart-total{display:flex;justify-content:space-between;font-size:18px;margin-bottom:16px}
+      if (path === '/session/close' && method === 'POST') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const { table_id } = await request.json();
+        if (!table_id) return jsonResponse({ error: 'table_id required' }, 400);
 
-.order-status{display:flex;justify-content:space-between;margin:24px 0;position:relative}
-.order-status::before{content:'';position:absolute;top:20px;left:10%;right:10%;height:2px;background:var(--border);z-index:0}
-.status-step{display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;z-index:1;flex:1}
-.status-icon{width:44px;height:44px;border-radius:50%;background:var(--bg);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px}
-.status-step.active .status-icon{background:var(--primary);border-color:var(--primary)}
-.status-label{font-size:12px;color:var(--muted);text-align:center}
-.status-step.active .status-label{color:var(--text);font-weight:600}
+        await env.DB.prepare('UPDATE sessions SET status = ?, closed_at = ? WHERE table_id = ? AND status = ?')
+          .bind('closed', Date.now(), table_id, 'open').run();
 
-input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:14px;border-radius:var(--radius);font-size:16px;margin:12px 0}
-.btn{background:#475569;color:#fff;border:none;border-radius:999px;padding:14px 20px;cursor:pointer;font-size:15px;min-height:48px;font-weight:500}
-.btn.primary{background:var(--primary)}
-.btn:active{transform:scale(0.98)}
-.row{display:flex;gap:8px;flex-wrap:wrap}
+        return jsonResponse({ success: true, table_id });
+      }
 
-.hint{color:var(--muted);font-size:13px;margin:8px 0}
-.footer{padding:16px;text-align:center;color:var(--muted);font-size:14px}
+      if (path === '/session/verify' && method === 'POST') {
+        const { table_id, pin } = await request.json();
+        if (!table_id || !pin) return jsonResponse({ error: 'table_id and pin required' }, 400);
 
-@media (max-width: 640px){
-  body{padding-bottom:140px}
-  .menu-item-header{flex-direction:column}
-  .menu-item-price{margin-left:0;margin-top:4px}
-}
+        const session = await env.DB.prepare('SELECT id, status FROM sessions WHERE table_id = ? AND pin = ? AND status = ?')
+          .bind(table_id, pin, 'open').first();
+
+        if (!session) return jsonResponse({ error: 'Invalid PIN or session closed' }, 403);
+
+        return jsonResponse({ token: session.id, session_id: session.id, table_id });
+      }
+
+      // === ORDINI ===
+
+      if (path === '/orders' && method === 'POST') {
+        const { token, items } = await request.json();
+        if (!token || !items || items.length === 0) return jsonResponse({ error: 'token and items required' }, 400);
+
+        const session = await env.DB.prepare('SELECT id, table_id, status FROM sessions WHERE id = ? AND status = ?')
+          .bind(token, 'open').first();
+        if (!session) return jsonResponse({ error: 'Invalid or closed session' }, 403);
+
+        const orderId = uuid();
+        await env.DB.prepare('INSERT INTO orders (id, session_id, state, created_at) VALUES (?, ?, ?, ?)')
+          .bind(orderId, session.id, 'richiesta', Date.now()).run();
+
+        for (const item of items) {
+          await env.DB.prepare('INSERT INTO order_items (id, order_id, item_id, item_name, quantity, unit_price_eur) VALUES (?, ?, ?, ?, ?, ?)')
+            .bind(uuid(), orderId, item.item_id, item.name, item.quantity, item.price_eur).run();
+        }
+
+        return jsonResponse({ order_id: orderId, state: 'richiesta' }, 201);
+      }
+
+      // ✅ NUOVO: GET /orders/mine - Storico ordini della sessione (cliente)
+      if (path === '/orders/mine' && method === 'GET') {
+        const token = url.searchParams.get('token') || request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+        if (!token) return jsonResponse({ error: 'token required' }, 400);
+
+        // Verifica token (session aperta)
+        const session = await env.DB.prepare('SELECT id, table_id, status FROM sessions WHERE id = ? AND status = ?')
+          .bind(token, 'open').first();
+        if (!session) return jsonResponse({ error: 'Invalid or closed session' }, 403);
+
+        // Prendi ordini della sessione
+        const { results: orders } = await env.DB.prepare(`
+          SELECT o.id, o.session_id, o.state, o.created_at, ? as table_id
+          FROM orders o
+          WHERE o.session_id = ?
+          ORDER BY o.created_at DESC
+        `).bind(session.table_id, session.id).all();
+
+        for (const order of orders) {
+          const { results: items } = await env.DB.prepare(
+            'SELECT item_name, quantity, unit_price_eur FROM order_items WHERE order_id = ?'
+          ).bind(order.id).all();
+          order.items = items;
+        }
+
+        return jsonResponse({ orders });
+      }
+
+      // GET /orders - Lista ordini (admin)
+      if (path === '/orders' && method === 'GET') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+
+        const tableFilter = url.searchParams.get('table_id');
+        const stateFilter = url.searchParams.get('state');
+        const sessionFilter = url.searchParams.get('session_id');
+
+        let query = `
+          SELECT o.id, o.session_id, o.state, o.created_at, s.table_id
+          FROM orders o
+          JOIN sessions s ON o.session_id = s.id
+          WHERE 1=1
+        `;
+        const bindings = [];
+
+        if (sessionFilter) {
+          query += ' AND o.session_id = ?';
+          bindings.push(sessionFilter);
+        } else if (tableFilter) {
+          query += ' AND s.table_id = ?';
+          bindings.push(tableFilter);
+        }
+
+        if (stateFilter) {
+          query += ' AND o.state = ?';
+          bindings.push(stateFilter);
+        }
+
+        query += ' ORDER BY o.created_at DESC';
+
+        const { results: orders } = await env.DB.prepare(query).bind(...bindings).all();
+
+        for (const order of orders) {
+          const { results: items } = await env.DB.prepare(
+            'SELECT item_name, quantity, unit_price_eur FROM order_items WHERE order_id = ?'
+          ).bind(order.id).all();
+          order.items = items;
+        }
+
+        return jsonResponse({ orders });
+      }
+
+      if (path.startsWith('/orders/') && method === 'PATCH') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const orderId = path.split('/')[2];
+        const { state } = await request.json();
+        if (!state) return jsonResponse({ error: 'state required' }, 400);
+
+        await env.DB.prepare('UPDATE orders SET state = ? WHERE id = ?').bind(state, orderId).run();
+        return jsonResponse({ success: true, order_id: orderId, state });
+      }
+
+      // === MENU ===
+
+      if (path === '/menu' && method === 'GET') {
+        const { results: categories } = await env.DB.prepare('SELECT * FROM menu_categories ORDER BY position').all();
+        const { results: items } = await env.DB.prepare('SELECT * FROM menu_items WHERE visible = 1 ORDER BY position').all();
+        return jsonResponse({ categories, items });
+      }
+
+      if (path === '/menu/admin' && method === 'GET') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const { results: categories } = await env.DB.prepare('SELECT * FROM menu_categories ORDER BY position').all();
+        const { results: items } = await env.DB.prepare('SELECT * FROM menu_items ORDER BY position').all();
+        return jsonResponse({ categories, items });
+      }
+
+      if (path === '/menu/categories' && method === 'POST') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const { name, position } = await request.json();
+        if (!name) return jsonResponse({ error: 'name required' }, 400);
+        const id = uuid();
+        await env.DB.prepare('INSERT INTO menu_categories (id, name, position) VALUES (?, ?, ?)')
+          .bind(id, name, position || 999).run();
+        return jsonResponse({ id, name, position }, 201);
+      }
+
+      if (path.startsWith('/menu/categories/') && method === 'PATCH') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const catId = path.split('/')[3];
+        const { name, position } = await request.json();
+        let query = 'UPDATE menu_categories SET';
+        const bindings = [];
+        if (name !== undefined) { query += ' name = ?'; bindings.push(name); }
+        if (position !== undefined) { query += (bindings.length ? ',' : '') + ' position = ?'; bindings.push(position); }
+        query += ' WHERE id = ?';
+        bindings.push(catId);
+        await env.DB.prepare(query).bind(...bindings).run();
+        return jsonResponse({ success: true, id: catId });
+      }
+
+      if (path.startsWith('/menu/categories/') && method === 'DELETE') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const catId = path.split('/')[3];
+        await env.DB.prepare('DELETE FROM menu_items WHERE category_id = ?').bind(catId).run();
+        await env.DB.prepare('DELETE FROM menu_categories WHERE id = ?').bind(catId).run();
+        return jsonResponse({ success: true, id: catId });
+      }
+
+      if (path === '/menu/items' && method === 'POST') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const { category_id, name, price_eur, description, tags, visible, position } = await request.json();
+        if (!category_id || !name || price_eur === undefined) return jsonResponse({ error: 'category_id, name, price_eur required' }, 400);
+        const id = uuid();
+        const tagsStr = tags ? JSON.stringify(tags) : null;
+        await env.DB.prepare('INSERT INTO menu_items (id, category_id, name, price_eur, description, tags, visible, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(id, category_id, name, price_eur, description || null, tagsStr, visible ? 1 : 0, position || 999).run();
+        return jsonResponse({ id, name, price_eur }, 201);
+      }
+
+      if (path.startsWith('/menu/items/') && method === 'PATCH') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const itemId = path.split('/')[3];
+        const data = await request.json();
+        const fields = [];
+        const bindings = [];
+        if (data.name !== undefined) { fields.push('name = ?'); bindings.push(data.name); }
+        if (data.price_eur !== undefined) { fields.push('price_eur = ?'); bindings.push(data.price_eur); }
+        if (data.description !== undefined) { fields.push('description = ?'); bindings.push(data.description); }
+        if (data.tags !== undefined) { fields.push('tags = ?'); bindings.push(JSON.stringify(data.tags)); }
+        if (data.visible !== undefined) { fields.push('visible = ?'); bindings.push(data.visible ? 1 : 0); }
+        if (data.position !== undefined) { fields.push('position = ?'); bindings.push(data.position); }
+        if (fields.length === 0) return jsonResponse({ error: 'No fields to update' }, 400);
+        bindings.push(itemId);
+        await env.DB.prepare(`UPDATE menu_items SET ${fields.join(', ')} WHERE id = ?`).bind(...bindings).run();
+        return jsonResponse({ success: true, id: itemId });
+      }
+
+      if (path.startsWith('/menu/items/') && method === 'DELETE') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const itemId = path.split('/')[3];
+        await env.DB.prepare('DELETE FROM menu_items WHERE id = ?').bind(itemId).run();
+        return jsonResponse({ success: true, id: itemId });
+      }
+
+      // === STATISTICHE ===
+
+      if (path === '/stats/top-items' && method === 'GET') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const from = url.searchParams.get('from');
+        const to = url.searchParams.get('to');
+
+        let query = 'SELECT item_name, SUM(quantity) as total FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.state = ?';
+        const bindings = ['servito'];
+        if (from) { query += ' AND o.created_at >= ?'; bindings.push(new Date(from).getTime()); }
+        if (to) { query += ' AND o.created_at <= ?'; bindings.push(new Date(to).getTime()); }
+        query += ' GROUP BY item_name ORDER BY total DESC';
+
+        const { results } = await env.DB.prepare(query).bind(...bindings).all();
+        return jsonResponse({ top_items: results });
+      }
+
+      if (path === '/stats/tables-opened' && method === 'GET') {
+        if (!isAdmin(request)) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const from = url.searchParams.get('from');
+        const to = url.searchParams.get('to');
+
+        let query = 'SELECT DATE(opened_at/1000, "unixepoch") as day, COUNT(*) as count FROM sessions WHERE 1=1';
+        const bindings = [];
+        if (from) { query += ' AND opened_at >= ?'; bindings.push(new Date(from).getTime()); }
+        if (to) { query += ' AND opened_at <= ?'; bindings
