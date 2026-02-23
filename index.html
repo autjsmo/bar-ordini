@@ -59,6 +59,7 @@
 
   <div id="toast" class="toast hidden" aria-live="polite"></div>
 
+  <!-- PIN Gate -->
   <div id="pinGate" class="modal">
     <div class="modal-content pin-gate">
       <h2>Accesso Tavolo <span id="pinGateTable">—</span></h2>
@@ -71,6 +72,7 @@
     </div>
   </div>
 
+  <!-- Menu -->
   <main id="menuSection" class="hidden">
     <section class="panel">
       <div class="search-box">
@@ -83,6 +85,7 @@
 
     <section id="menuItems" class="menu-items" aria-live="polite"></section>
 
+    <!-- Carrello fisso -->
     <div id="cartBar" class="cart-bar hidden">
       <div class="cart-summary">
         <span id="cartCount" class="cart-count">0 articoli</span>
@@ -95,6 +98,7 @@
     </div>
   </main>
 
+  <!-- Modal Carrello -->
   <div id="cartModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Carrello">
     <div class="modal-content">
       <div class="modal-head">
@@ -114,6 +118,7 @@
     </div>
   </div>
 
+  <!-- Modal Storico -->
   <div id="historyModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="I tuoi ordini">
     <div class="modal-content">
       <div class="modal-head">
@@ -125,22 +130,11 @@
     </div>
   </div>
 
+  <!-- Modal Ordine inviato (pulita) -->
   <div id="orderStatusModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Stato ordine">
     <div class="modal-content">
       <h2>Ordine inviato</h2>
       <p class="hint" id="orderStatusText">Grazie! Lo staff ha ricevuto la richiesta.</p>
-
-      <div class="status-line">
-        <div class="status-dot active">
-          <div class="status-emoji">📝</div>
-          <div class="status-label">Mandato</div>
-        </div>
-        <div class="status-dot">
-          <div class="status-emoji">🎊</div>
-          <div class="status-label">Servito</div>
-        </div>
-      </div>
-
       <button id="closeOrderStatusBtn" class="btn primary full">Ordina altro</button>
     </div>
   </div>
