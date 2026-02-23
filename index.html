@@ -10,14 +10,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Italiana&display=swap" rel="stylesheet">
 
-  <!-- 1) CSS standard -->
   <link rel="stylesheet" href="/bar-ordini/style.css" id="mainStylesheet">
 
-  <!-- 2) Fix: se per cache/redirect non viene applicato, lo reiniettiamo con cache-busting -->
   <script>
     (function () {
       const CSS_PATH = '/bar-ordini/style.css';
-      const EXPECTED_BG = 'rgb(251, 248, 242)'; // #fbf8f2 del tema floreale
+      const EXPECTED_BG = 'rgb(251, 248, 242)';
 
       function bgNow() {
         try { return getComputedStyle(document.body).backgroundColor; }
@@ -34,15 +32,10 @@
         document.head.appendChild(l);
       }
 
-      // Nota: usiamo window.load + timeout breve per lasciare al browser il tempo di applicare.
       window.addEventListener('load', () => {
         setTimeout(() => {
           const bg = bgNow();
-          // Se non è il colore atteso, vuol dire che il CSS non è stato applicato -> fallback.
-          if (bg && bg !== EXPECTED_BG) {
-            console.log('[CSS] not applied, bg=', bg, '-> fallback inject');
-            injectBustedCss();
-          }
+          if (bg && bg !== EXPECTED_BG) injectBustedCss();
         }, 180);
       });
     })();
@@ -59,7 +52,8 @@
     </div>
 
     <div id="tableInfo" class="table-info hidden">
-      Tavolo <strong id="currentTable">—</strong>
+      <span>Tavolo <strong id="currentTable">—</strong></span>
+      <button id="openHistoryBtn" class="mini-btn" type="button">I tuoi ordini</button>
     </div>
   </header>
 
@@ -85,11 +79,6 @@
       </div>
 
       <nav class="categories" id="categoryNav" aria-label="Categorie"></nav>
-
-      <div style="display:flex; gap:10px; margin-top:12px;">
-        <button id="openHistoryBtn" class="btn" type="button">I tuoi ordini</button>
-        <button id="refreshHistoryBtn" class="btn" type="button">Aggiorna</button>
-      </div>
     </section>
 
     <section id="menuItems" class="menu-items" aria-live="polite"></section>
@@ -144,7 +133,7 @@
       <div class="status-line">
         <div class="status-dot active">
           <div class="status-emoji">📝</div>
-          <div class="status-label">Ricevuto</div>
+          <div class="status-label">Mandato</div>
         </div>
         <div class="status-dot">
           <div class="status-emoji">🎊</div>
@@ -156,13 +145,6 @@
     </div>
   </div>
 
-  <footer class="footer">
-    <span aria-hidden="true">🌿</span>
-    <span>Buon appetito</span>
-    <span aria-hidden="true">🌿</span>
-  </footer>
-
-  <!-- JS con path assoluti -->
   <script src="/bar-ordini/config.js"></script>
   <script src="/bar-ordini/app.js"></script>
 </body>
