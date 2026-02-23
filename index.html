@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Italiana&display=swap" rel="stylesheet">
 
-  <!-- usa percorso relativo esplicito -->
-  <link href="./style.css" rel="stylesheet" id="mainStylesheet">
+  <!-- ✅ path assoluto per GitHub Pages repo "bar-ordini" -->
+  <link href="/bar-ordini/style.css" rel="stylesheet" id="mainStylesheet">
 </head>
 <body>
   <header class="topbar">
@@ -127,14 +127,15 @@
     <span aria-hidden="true">🌿</span>
   </footer>
 
-  <script src="./config.js"></script>
-  <script src="./app.js"></script>
+  <!-- ✅ path assoluti per GitHub Pages repo "bar-ordini" -->
+  <script src="/bar-ordini/config.js"></script>
+  <script src="/bar-ordini/app.js"></script>
 
   <script>
     const link = document.getElementById('mainStylesheet');
     link.addEventListener('error', () => {
       const t = document.getElementById('toast');
-      t.textContent = 'CSS non caricato (style.css). Controlla che sia nella stessa cartella di index.html.';
+      t.textContent = 'CSS non caricato. Controlla che /bar-ordini/style.css esista su GitHub Pages.';
       t.classList.remove('hidden');
     });
   </script>
